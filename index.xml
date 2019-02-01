@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>the daily meh on the daily meh</title><link>https://nagimov.me/</link><description>Recent content in the daily meh on the daily meh</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Thu, 18 Aug 2016 20:56:00 -0800</lastBuildDate><atom:link href="/" rel="self" type="application/rss+xml"/><item><title>alsa-utils&#39; arecord bug: lots of *.wav files, ignoring --duration parameter</title><link>https://nagimov.me/post/alsa-utils-arecord-bug-lots-of-wav-files-ignoring-duration-parameter/</link><pubDate>Thu, 18 Aug 2016 20:56:00 -0800</pubDate><guid>https://nagimov.me/post/alsa-utils-arecord-bug-lots-of-wav-files-ignoring-duration-parameter/</guid><description>&lt;p&gt;&lt;img src=&#34;https://nagimov.me/images/alsamixer.png#center&#34; alt=&#34;width500px&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;While working on a small side project at work, I found that I can&amp;rsquo;t record sound using Raspberry Pi with external USB sound card after upgrading it to Raspbian Jessie. Symptoms look rather weird: &lt;code&gt;arecord&lt;/code&gt; doesn&amp;rsquo;t stop recording after a period of time specified by &lt;code&gt;--duration&lt;/code&gt; flag, but keeps running and writing garbage to files like &lt;code&gt;*-01.wav&lt;/code&gt;, &lt;code&gt;*-02.wav&lt;/code&gt; and so on. Google doesn&amp;rsquo;t really give any solution to this (except &lt;a href=&#34;http://superuser.com/questions/583826/recording-using-arecord-creates-thousands-of-files&#34;&gt;the recommendation&lt;/a&gt; of terminating &lt;code&gt;arecord&lt;/code&gt; using &lt;code&gt;killall -KILL arecord&lt;/code&gt; after certain period of time). USB microphones are &lt;a href=&#34;https://www.raspberrypi.org/forums/viewtopic.php?f=66&amp;amp;t=138722&#34;&gt;also affected&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Considering I have another Raspberry Pi running Wheezy and having no problems at all (and being free of systemd malware ;) that looks like a bug of arecord. Debian Jessie &lt;a href=&#34;https://packages.debian.org/jessie/alsa-utils&#34;&gt;includes&lt;/a&gt; &lt;code&gt;alsa-utils&lt;/code&gt; of version &lt;code&gt;1.0.28&lt;/code&gt; and &lt;code&gt;arecord --version&lt;/code&gt; on my Raspbian (image &lt;code&gt;2016-05-27-raspbian-jessie.img&lt;/code&gt;) gives the same. Here is &lt;a href=&#34;http://superuser.com/questions/583826/recording-using-arecord-creates-thousands-of-files&#34;&gt;the report&lt;/a&gt; that version &lt;code&gt;1.0.27&lt;/code&gt; of Linux Arch also suffers from that. Debian Wheezy &lt;a href=&#34;https://packages.debian.org/wheezy/alsa-utils&#34;&gt;has&lt;/a&gt; alsa-utils &lt;code&gt;1.0.25&lt;/code&gt; and it&amp;rsquo;s free of this bug. So since the bug was introduced in either &lt;code&gt;1.0.26&lt;/code&gt; or &lt;code&gt;1.0.27&lt;/code&gt; version of &lt;code&gt;alsa-utils&lt;/code&gt;, downgrading it to a version below &lt;code&gt;1.0.26&lt;/code&gt; should normally help.&lt;/p&gt;
+&lt;p&gt;Here is how to do that in Raspbian Jessie environment (correct the repo address according to your version):&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Firstly we are going to add Wheezy&amp;rsquo;s repo to the system. Add &lt;code&gt;deb http://mirrordirector.raspbian.org/raspbian/ wheezy main contrib non-free rpi&lt;/code&gt; line to the end of &lt;code&gt;/etc/apt/sources.list&lt;/code&gt; file.&lt;/li&gt;
+&lt;li&gt;Update the sources: &lt;code&gt;sudo apt-get update&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Check available versions of the package: &lt;code&gt;sudo aptitude versions alsa-utils&lt;/code&gt;. This should show an older version of &lt;code&gt;alsa-utils&lt;/code&gt; to become available.&lt;/li&gt;
+&lt;li&gt;Install the older version (depeinding from what&amp;rsquo;s available): &lt;code&gt;sudo apt-get install alsa-utils=1.0.25-4&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Now check arecord. For USB sound card detected as a device #1 this would be: &lt;code&gt;arecord -D plughw:1,0 -r 44100 -f cd -d 5 -vv ~/test.wav&lt;/code&gt;. Recording should stop in 5 seconds.&lt;/li&gt;
+&lt;li&gt;Revert the changes made to &lt;code&gt;/etc/apt/sources.list&lt;/code&gt; (just comment the newly added line) and update the sources again: &lt;code&gt;sudo apt-get update&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Have fun arecording!&lt;/p&gt;</description></item><item><title>Calibration of MAX31855 thermocouple converter</title><link>https://nagimov.me/post/max31855-thermocouple-to-digital-converter/</link><pubDate>Mon, 15 Aug 2016 17:55:00 -0800</pubDate><guid>https://nagimov.me/post/max31855-thermocouple-to-digital-converter/</guid><description>&lt;p&gt;&lt;img src=&#34;https://nagimov.me/images/MAX31855-K-Type-Thermocouple-Breakout-Board.png#floatright&#34; alt=&#34;width300px&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;I have recently spent some time playing with &lt;a href=&#34;https://www.maximintegrated.com/en/products/analog/sensors-and-sensor-interface/MAX31855.html&#34;&gt;Maxim 31855 chips&lt;/a&gt;, in a need of precise and cheap K-type thermocouple logger. It is a cheap voltage amplifier with digital SPI interface, so it works perfectly well with Raspberry Pi or Arduino.&lt;/p&gt;
+&lt;p&gt;There are many thermocouple amplifiers out there, and I am sure that most of them are properly calibrated for the temperature range around +/-50C, since even linear volt-to-degreeC conversion works fine in that range. It is only when it comes to extremely low/high temperatures, nonlinearities tend to mess up the readings.&lt;/p&gt;
+&lt;p&gt;It is known that Maxim 31855 uses simple linear millivolts-to-degrees conversion through &lt;code&gt;0.041276&lt;/code&gt; factor (i.e. 1&amp;nbsp;millivolt junction potential is 0.04&amp;nbsp;degrees&amp;nbsp;C). That gives the way to reverse calculate the potential. We can then use more sophisticated &lt;a href=&#34;http://srdata.nist.gov/its90/download/type_k.tab&#34;&gt;NIST formulation&lt;/a&gt; to find the temperature difference between junctions:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-python&#34;&gt;from math import exp
+def nist_tc(tc, cj): # tc - thermocouple, cj - cold junction
+tcV = (tc - cj) * 0.041276
+cjV = \
+-0.176004136860E-01 + \
+0.389212049750E-01 * cj + \
+0.185587700320E-04 * cj**2.0 + \
+-0.994575928740E-07 * cj**3.0 + \
+0.318409457190E-09 * cj**4.0 + \
+-0.560728448890E-12 * cj**5.0 + \
+0.560750590590E-15 * cj**6.0 + \
+-0.320207200030E-18 * cj**7.0 + \
+0.971511471520E-22 * cj**8.0 + \
+-0.121047212750E-25 * cj**9.0 + \
+0.118597600000E+00 * \
+exp(-0.118343200000E-03 * (cj - 0.126968600000E+03)**2.0)
+sumV = tcV + cjV
+if tcV &amp;lt; 0:
+b = [ 0.0000000E+00, 2.5173462E+01, \
+-1.1662878E+00, -1.0833638E+00, \
+-8.9773540E-01, -3.7342377E-01, \
+-8.6632643E-02, -1.0450598E-02, \
+-5.1920577E-04, 0.0000000E+00, \
+]
+elif tcV &amp;lt; 20.644:
+b = [ 0.000000E+00, 2.508355E+01, \
+7.860106E-02, -2.503131E-01, \
+8.315270E-02, -1.228034E-02, \
+9.804036E-04, -4.413030E-05, \
+1.057734E-06, -1.052755E-08, \
+]
+elif tcV &amp;lt; 54.886:
+b = [ -1.318058E+02, 4.830222E+01, \
+-1.646031E+00, 5.464731E-02, \
+-9.650715E-04, 8.802193E-06, \
+-3.110810E-08, 0.000000E+00, \
+0.000000E+00, 0.000000E+00, \
+]
+else:
+print(&#39;voltage error&#39;)
+return None
+temp = 0
+for index, element in enumerate(b):
+temp += element * sumV**index
+return temp
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Nice cheap SPI-interfaced breakout boards are &lt;a href=&#34;https://www.adafruit.com/product/269&#34;&gt;sold by Adafruit&lt;/a&gt;.&lt;/p&gt;</description></item><item><title>Amazon Fire TV 2nd Gen - Root &amp; OpenVPN</title><link>https://nagimov.me/post/fire-tv-2nd-gen-root-openvpn/</link><pubDate>Wed, 30 Mar 2016 19:35:32 -0800</pubDate><guid>https://nagimov.me/post/fire-tv-2nd-gen-root-openvpn/</guid><description>&lt;p&gt;&lt;strong&gt;My notes after spending half a day playing with my Fire TV.&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&#34;https://nagimov.me/images/amazon-fire-tv.png#center&#34; alt=&#34;&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;While Amazon Fire TV seems to be the best htpc solution to me, it still requires rooting and a bit of patching on its way to a decent media center. I&amp;rsquo;m also used to US streaming services (&lt;em&gt;Pandora&lt;/em&gt;, &lt;em&gt;Netflix&lt;/em&gt;, &lt;em&gt;Hulu&lt;/em&gt;, etc) which are only available through VPN, if you are outside of US. Rooting and setting up Kodi + OpenVPN is a way to go.&lt;/p&gt;
+&lt;p&gt;Rooting is simple and straightforward, I followed &lt;a href=&#34;http://www.aftvnews.com/how-to-root-the-amazon-fire-tv-2/&#34;&gt;this guide&lt;/a&gt; and everything went smooth.&lt;/p&gt;
+&lt;p&gt;Problems started with OpenVPN. Even though there are few tutorials out there (&lt;a href=&#34;https://www.reddit.com/r/fireTV/comments/2b4hlh/finally_got_vpn_working/&#34;&gt;here&lt;/a&gt; and &lt;a href=&#34;https://vpntips.com/fire-tv-vpn-install/&#34;&gt;there&lt;/a&gt;), I didn&amp;rsquo;t manage to install OpenVPN using the &lt;a href=&#34;http://apps.evozi.com/apk-downloader/?id=de.schaeuffelhut.android.openvpn.installer&#34;&gt;installer apk&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;a href=&#34;http://jjjjango.blogspot.ca/2013/07/how-to-manually-install-openvpn-binary.html&#34;&gt;Another tutorial&lt;/a&gt; suggested to do manually everything what installer is supposed to do (i.e. unpack OpenVPN binary to &lt;code&gt;/system/xbin/&lt;/code&gt;). So I&amp;rsquo;ve done that and got &lt;code&gt;only position independent executables (PIE) are supported&lt;/code&gt; error when trying to start OpenVPN from adb console. Apparently, &lt;a href=&#34;http://forum.xda-developers.com/google-nexus-5/development/fix-bypassing-pie-security-check-t2797731&#34;&gt;there is a big issue&lt;/a&gt; with &lt;em&gt;position independent executables&lt;/em&gt; (whatever that means). The first fix is to find the OpenVPN binary compiled with PIE support (or compile it by yourself adding &lt;code&gt;&amp;quot;-fPIE -pie&amp;quot;&lt;/code&gt; linker option), but people are lazy, apparently. Another way to deal with that PIE issue is to patch the &lt;code&gt;linker&lt;/code&gt; binary located in &lt;code&gt;/system/bin/&lt;/code&gt; directory. I&amp;rsquo;ve tried a bunch of different versions of the &lt;code&gt;linker&lt;/code&gt; file, sometimes getting an unexpected behavior of Android (e.g. &lt;code&gt;application storage space is full&lt;/code&gt; error) or even screwing my Fire TV to the boot-loop. &lt;a href=&#34;http://forum.xda-developers.com/showpost.php?p=59497445&amp;amp;postcount=83&#34;&gt;This&lt;/a&gt; is the version of patched linker which worked great with my Fire TV.&lt;/p&gt;
+&lt;p&gt;Just as a reminder, here is how you replace &lt;code&gt;linker&lt;/code&gt; file in &lt;code&gt;/system/bin/&lt;/code&gt; directory:&lt;/p&gt;
+&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;adb push linker /sdcard/
+adb shell
+su
+mount -o remount rw /system
+mv /system/bin/linker /system/bin/linker.bak
+cp /sdcard/linker /system/bin/
+chmod 755 /system/bin/linker
+mount -o remount ro /system
+rm /sdcard/linker
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Happy Kodiing!&lt;/p&gt;</description></item></channel></rss>

@@ -1,0 +1,30 @@
+<!doctype html><html class=no-js lang=en-us xmlns=http://www.w3.org/1999/xhtml xml:lang=en lang=en-us><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="Amazon Fire TV 2nd Gen - Root &amp; OpenVPN"><meta name=author content><meta name=keyword content><link rel="shortcut icon" href=/favicon.ico><title>Amazon Fire TV 2nd Gen - Root &amp; OpenVPN &middot; the daily meh</title><link rel=stylesheet href=https://nagimov.me/css/theme/journal.css><link rel=stylesheet href=https://nagimov.me/css/font-awesome.min.css><link rel=stylesheet href=https://nagimov.me/css/style.css><script src=https://nagimov.me/js/jquery.min-2.1.4.js></script><script src=https://nagimov.me/js/bootstrap.min-3.3.5.js></script><script>var remark_config={site_id:'nagimov_me',theme:'light',};(function(){var d=document,s=d.createElement('script');s.src='https://remark.ngm.me/web/embed.js';(d.head||d.body).appendChild(s);})();</script><script type=text/javascript>var owa_baseUrl='https://owa.ngm.me/';var owa_cmds=owa_cmds||[];owa_cmds.push(['setSiteId','59705c41feb07994848a84ac449fb28d']);owa_cmds.push(['trackPageView']);owa_cmds.push(['trackClicks']);(function(){var _owa=document.createElement('script');_owa.type='text/javascript';_owa.async=true;owa_baseUrl=('https:'==document.location.protocol?window.owa_baseSecUrl||owa_baseUrl.replace(/http:/,'https:'):owa_baseUrl);_owa.src=owa_baseUrl+'modules/base/js/owa.tracker-combined-min.js';var _owa_s=document.getElementsByTagName('script')[0];_owa_s.parentNode.insertBefore(_owa,_owa_s);}());</script><link href rel=alternate type=application/rss+xml title="the daily meh"></head><body lang=en><div class=container><div class=row><div class="navbar navbar-default" role=navigation><div class=navbar-header><a class=navbar-brand href=https://nagimov.me>the daily meh</a></div><div class="navbar-collapse collapse navbar-responsive-collapse"><ul class="nav navbar-nav navbar-right"><li><a href=https://nagimov.me>Home</a></li><li><a href=https://nagimov.me/post/>Posts</a></li><li><a href=/about/>About</a></li></ul></div></div></div></div><div class=container><div class=row><div class="col-md-offset-1 col-md-10"><h3>Amazon Fire TV 2nd Gen - Root &amp; OpenVPN</h3><span class="label label-primary">2016-03-30</span> in
+using tags
+<a href=/tags/amazon>Amazon</a>
+,
+<a href=/tags/fire-tv>Fire TV</a>
+,
+<a href=/tags/kodi>Kodi</a>
+,
+<a href=/tags/xbmc>XBMC</a>
+,
+<a href=/tags/vpn>VPN</a>
+,
+<a href=/tags/openvpn>OpenVPN</a>
+,
+<a href=/tags/android>Android</a>
+,
+<a href=/tags/linker>linker</a>
+,
+<a href=/tags/pie>PIE</a>
+,
+<a href=/tags/root>Root</a></small></div></div><div class=row><div class="col-md-offset-1 col-md-10"><br><p><strong>My notes after spending half a day playing with my Fire TV.</strong></p><p><img src=/images/amazon-fire-tv.png#center alt></p><p>While Amazon Fire TV seems to be the best htpc solution to me, it still requires rooting and a bit of patching on its way to a decent media center. I&rsquo;m also used to US streaming services (<em>Pandora</em>, <em>Netflix</em>, <em>Hulu</em>, etc) which are only available through VPN, if you are outside of US. Rooting and setting up Kodi + OpenVPN is a way to go.</p><p>Rooting is simple and straightforward, I followed <a href=http://www.aftvnews.com/how-to-root-the-amazon-fire-tv-2/>this guide</a> and everything went smooth.</p><p>Problems started with OpenVPN. Even though there are few tutorials out there (<a href=https://www.reddit.com/r/fireTV/comments/2b4hlh/finally_got_vpn_working/>here</a> and <a href=https://vpntips.com/fire-tv-vpn-install/>there</a>), I didn&rsquo;t manage to install OpenVPN using the <a href="http://apps.evozi.com/apk-downloader/?id=de.schaeuffelhut.android.openvpn.installer">installer apk</a>.</p><p><a href=http://jjjjango.blogspot.ca/2013/07/how-to-manually-install-openvpn-binary.html>Another tutorial</a> suggested to do manually everything what installer is supposed to do (i.e. unpack OpenVPN binary to <code>/system/xbin/</code>). So I&rsquo;ve done that and got <code>only position independent executables (PIE) are supported</code> error when trying to start OpenVPN from adb console. Apparently, <a href=http://forum.xda-developers.com/google-nexus-5/development/fix-bypassing-pie-security-check-t2797731>there is a big issue</a> with <em>position independent executables</em> (whatever that means). The first fix is to find the OpenVPN binary compiled with PIE support (or compile it by yourself adding <code>&quot;-fPIE -pie&quot;</code> linker option), but people are lazy, apparently. Another way to deal with that PIE issue is to patch the <code>linker</code> binary located in <code>/system/bin/</code> directory. I&rsquo;ve tried a bunch of different versions of the <code>linker</code> file, sometimes getting an unexpected behavior of Android (e.g. <code>application storage space is full</code> error) or even screwing my Fire TV to the boot-loop. <a href="http://forum.xda-developers.com/showpost.php?p=59497445&amp;postcount=83">This</a> is the version of patched linker which worked great with my Fire TV.</p><p>Just as a reminder, here is how you replace <code>linker</code> file in <code>/system/bin/</code> directory:</p><pre><code class=language-bash>adb push linker /sdcard/
+adb shell
+su
+mount -o remount rw /system
+mv /system/bin/linker /system/bin/linker.bak
+cp /sdcard/linker /system/bin/
+chmod 755 /system/bin/linker 
+mount -o remount ro /system
+rm /sdcard/linker
+</code></pre><p>Happy Kodiing!</p></div></div><div class=row><div class=col-md-12><hr></div></div><div class=row><div class="col-md-offset-1 col-md-10"><div id=remark42></div></div></div></div><div class=container><div class="row col-md-12"><footer><div class=pull-left><p>&copy; ~ Powered By <a href=http://hugo.spf13.com>Hugo</a> - version: 0.52 ~ <a href=https://nagimov.me/license>License</a></p></div><div class=pull-right><a href=https://github.com/nagimov target=_blank><i class="fa fa-github-square fa-2x"></i></a></div></footer></div></div></body></html>
