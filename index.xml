@@ -25,12 +25,13 @@
 &lt;p&gt;PLCs are made to be robust and more often than not programmed using &lt;a href=&#34;https://en.wikipedia.org/wiki/Ladder_logic&#34;&gt;ladder logic&lt;/a&gt;. PLC programs are not meant to be easy to write, but are easy to debug. You&amp;rsquo;ll never find tail-recursion or polymorphism capabilities in PLC languages. There is no unit-testing, you&amp;rsquo;ll test it in the field, attached to a big, heavy, piece of industrial machinery. Many of PLCs lack the most basic concepts like &lt;em&gt;variables&lt;/em&gt;. Ladder logic is never mentioned at hackathons, your local meetups, or &lt;a href=&#34;https://hn.algolia.com/?query=%22ladder%20logic%22&#34;&gt;praised on hacker news&lt;/a&gt;.&lt;/p&gt;
 &lt;p&gt;&lt;img src=&#34;https://nagimov.me/images/ladder-logic-hacker-news.png#center&#34; alt=&#34;width500px&#34; /&gt;&lt;/p&gt;
 &lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/Programmable_logic_controller#Invention_and_early_development&#34;&gt;As a natural evolution of electromechanical relay control systems&lt;/a&gt;, ladder logic programming follows similar rules. Here&amp;rsquo;s how a simple PLC program controlling AC unit might look like:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;1. ----[ ]---------+----[ ]-----+----( )
-Switch | HiTemp | A/C
-| |
-+----[ ]-----+
-Humid
-2. ----[ ]----[\]--------------------( )
+&lt;pre&gt;&lt;code&gt;+---[ ]---+---[ ]---+---( )
+| Switch | HiTemp | A/C
+| | |
+| +---[ ]---+
+| Humid
+|
++---[ ]-------[\]-------( )
 A/C Heat Cooling
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;Inputs &amp;ldquo;relays&amp;rdquo; are shown as &lt;code&gt;--[ ]--&lt;/code&gt;, outputs are &lt;code&gt;--( )--&lt;/code&gt;. When enough inputs are activated to create a &amp;ldquo;current path&amp;rdquo; to the output, it becomes &amp;ldquo;energized&amp;rdquo;. This worked well for early systems that were designed to replace relay boxes. Spoiled engineers however demanded fancier features, such as integer arithmetic, floating-point operations and even string manipulations. Following the lead of a semiconductor industry, PLC manufacturers complemented their systems with coprocessors for floating-point math and whatnot. Unfortunately, many of them haven&amp;rsquo;t got further, albeit some systems nowadays support &lt;a href=&#34;https://en.wikipedia.org/wiki/Structured_text&#34;&gt;structured text&lt;/a&gt; or even subsets of C/C++.&lt;/p&gt;
