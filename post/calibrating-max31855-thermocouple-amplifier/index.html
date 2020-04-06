@@ -1,0 +1,58 @@
+<!doctype html><html class=no-js lang=en-us xmlns=http://www.w3.org/1999/xhtml xml:lang=en lang=en-us><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=description content="Calibrating MAX31855 thermocouple amplifier"><meta name=author content><meta name=keyword content><link rel="shortcut icon" href=/favicon.ico><title>Calibrating MAX31855 thermocouple amplifier &#183; the daily meh</title><link rel=stylesheet href=https://nagimov.me/css/theme/flatly.css><link rel=stylesheet href=https://nagimov.me/css/font-awesome.min.css><link rel=stylesheet href=https://nagimov.me/css/style.css><script src=https://nagimov.me/js/jquery.min-2.1.4.js></script><script src=https://nagimov.me/js/bootstrap.min-3.3.5.js></script><script>var remark_config={site_id:'nagimov_me',theme:'light',};(function(){var d=document,s=d.createElement('script');s.src='https://remark.ngm.me/web/embed.js';(d.head||d.body).appendChild(s);})();</script><script type=text/javascript>var owa_baseUrl='https://owa.ngm.me/';var owa_cmds=owa_cmds||[];owa_cmds.push(['setSiteId','59705c41feb07994848a84ac449fb28d']);owa_cmds.push(['trackPageView']);owa_cmds.push(['trackClicks']);(function(){var _owa=document.createElement('script');_owa.type='text/javascript';_owa.async=true;owa_baseUrl=('https:'==document.location.protocol?window.owa_baseSecUrl||owa_baseUrl.replace(/http:/,'https:'):owa_baseUrl);_owa.src=owa_baseUrl+'modules/base/js/owa.tracker-combined-min.js';var _owa_s=document.getElementsByTagName('script')[0];_owa_s.parentNode.insertBefore(_owa,_owa_s);}());</script><link href rel=alternate type=application/rss+xml title="the daily meh"></head><body lang=en><div class=container><div class=row><div class="navbar navbar-default" role=navigation><div class=navbar-header><a class=navbar-brand href=https://nagimov.me>the daily meh</a></div><div class="navbar-collapse collapse navbar-responsive-collapse"><ul class="nav navbar-nav navbar-right"><li><a href=https://nagimov.me>Home</a></li><li><a href=https://nagimov.me/post/>Posts</a></li><li><a href=/about/>About</a></li></ul></div></div></div></div><div class=container><div class=row><div class="col-md-offset-1 col-md-10" style=display:flex;justify-content:space-between><div><h3>Calibrating MAX31855 thermocouple amplifier</h3></div><div>&nbsp;&nbsp;&nbsp;&nbsp;</div><div style=margin-bottom:10.5px;margin-top:21px><span class="label label-primary">2016-08-15</span></div></div></div><div class=row><div class="col-md-offset-1 col-md-10"><p><img src=/images/MAX31855-K-Type-Thermocouple-Breakout-Board.png#floatright alt=width300px></p><p>I have recently spent some time playing with <a href=https://www.maximintegrated.com/en/products/analog/sensors-and-sensor-interface/MAX31855.html>Maxim 31855 chips</a>, in a need of a precise and cheap K-type thermocouple logger. It is a simple voltage amplifier with digital SPI interface, so it works perfectly well with Raspberry Pi or Arduino.</p><p>There are many thermocouple amplifiers out there, and I am sure that most of them are properly calibrated for temperatures around +/-50C, since even linear volt-to-degreeC conversion works fine in that range. It is only when it comes to extremely low/high temperatures, non-linearities tend to mess up the readings.</p><p>Maxim 31855 uses a simple linear millivolts-to-degrees conversion through <code>0.041276</code> factor (i.e. 1 millivolt junction potential is 0.04 degrees C). That gives a way to reverse calculate the potential. We can then use more sophisticated <a href=http://srdata.nist.gov/its90/download/type_k.tab>NIST formulation</a> to find the temperature difference between junctions:</p><div class=highlight><pre style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-python data-lang=python><span style=color:#f92672>from</span> math <span style=color:#f92672>import</span> exp
+
+<span style=color:#66d9ef>def</span> <span style=color:#a6e22e>nist_tc</span>(tc, cj):  <span style=color:#75715e># tc - thermocouple, cj - cold junction</span>
+    tcV <span style=color:#f92672>=</span> (tc <span style=color:#f92672>-</span> cj) <span style=color:#f92672>*</span> <span style=color:#ae81ff>0.041276</span>
+    cjV <span style=color:#f92672>=</span> \
+    <span style=color:#f92672>-</span><span style=color:#ae81ff>0.176004136860E-01</span> <span style=color:#f92672>+</span> \
+     <span style=color:#ae81ff>0.389212049750E-01</span> <span style=color:#f92672>*</span> cj <span style=color:#f92672>+</span> \
+     <span style=color:#ae81ff>0.185587700320E-04</span> <span style=color:#f92672>*</span> cj<span style=color:#f92672>**</span><span style=color:#ae81ff>2.0</span> <span style=color:#f92672>+</span> \
+    <span style=color:#f92672>-</span><span style=color:#ae81ff>0.994575928740E-07</span> <span style=color:#f92672>*</span> cj<span style=color:#f92672>**</span><span style=color:#ae81ff>3.0</span> <span style=color:#f92672>+</span> \
+     <span style=color:#ae81ff>0.318409457190E-09</span> <span style=color:#f92672>*</span> cj<span style=color:#f92672>**</span><span style=color:#ae81ff>4.0</span> <span style=color:#f92672>+</span> \
+    <span style=color:#f92672>-</span><span style=color:#ae81ff>0.560728448890E-12</span> <span style=color:#f92672>*</span> cj<span style=color:#f92672>**</span><span style=color:#ae81ff>5.0</span> <span style=color:#f92672>+</span> \
+     <span style=color:#ae81ff>0.560750590590E-15</span> <span style=color:#f92672>*</span> cj<span style=color:#f92672>**</span><span style=color:#ae81ff>6.0</span> <span style=color:#f92672>+</span> \
+    <span style=color:#f92672>-</span><span style=color:#ae81ff>0.320207200030E-18</span> <span style=color:#f92672>*</span> cj<span style=color:#f92672>**</span><span style=color:#ae81ff>7.0</span> <span style=color:#f92672>+</span> \
+     <span style=color:#ae81ff>0.971511471520E-22</span> <span style=color:#f92672>*</span> cj<span style=color:#f92672>**</span><span style=color:#ae81ff>8.0</span> <span style=color:#f92672>+</span> \
+    <span style=color:#f92672>-</span><span style=color:#ae81ff>0.121047212750E-25</span> <span style=color:#f92672>*</span> cj<span style=color:#f92672>**</span><span style=color:#ae81ff>9.0</span> <span style=color:#f92672>+</span> \
+     <span style=color:#ae81ff>0.118597600000E+00</span> <span style=color:#f92672>*</span> \
+     exp(<span style=color:#f92672>-</span><span style=color:#ae81ff>0.118343200000E-03</span> <span style=color:#f92672>*</span> (cj <span style=color:#f92672>-</span> <span style=color:#ae81ff>0.126968600000E+03</span>)<span style=color:#f92672>**</span><span style=color:#ae81ff>2.0</span>)
+    sumV <span style=color:#f92672>=</span> tcV <span style=color:#f92672>+</span> cjV
+    <span style=color:#66d9ef>if</span> tcV <span style=color:#f92672>&lt;</span> <span style=color:#ae81ff>0</span>:
+        b <span style=color:#f92672>=</span> [  <span style=color:#ae81ff>0.0000000E+00</span>,  <span style=color:#ae81ff>2.5173462E+01</span>, \
+              <span style=color:#f92672>-</span><span style=color:#ae81ff>1.1662878E+00</span>, <span style=color:#f92672>-</span><span style=color:#ae81ff>1.0833638E+00</span>, \
+              <span style=color:#f92672>-</span><span style=color:#ae81ff>8.9773540E-01</span>, <span style=color:#f92672>-</span><span style=color:#ae81ff>3.7342377E-01</span>, \
+              <span style=color:#f92672>-</span><span style=color:#ae81ff>8.6632643E-02</span>, <span style=color:#f92672>-</span><span style=color:#ae81ff>1.0450598E-02</span>, \
+              <span style=color:#f92672>-</span><span style=color:#ae81ff>5.1920577E-04</span>,  <span style=color:#ae81ff>0.0000000E+00</span>, \
+             ]
+    <span style=color:#66d9ef>elif</span> tcV <span style=color:#f92672>&lt;</span> <span style=color:#ae81ff>20.644</span>:
+        b <span style=color:#f92672>=</span> [  <span style=color:#ae81ff>0.000000E+00</span>,  <span style=color:#ae81ff>2.508355E+01</span>, \
+               <span style=color:#ae81ff>7.860106E-02</span>, <span style=color:#f92672>-</span><span style=color:#ae81ff>2.503131E-01</span>, \
+               <span style=color:#ae81ff>8.315270E-02</span>, <span style=color:#f92672>-</span><span style=color:#ae81ff>1.228034E-02</span>, \
+               <span style=color:#ae81ff>9.804036E-04</span>, <span style=color:#f92672>-</span><span style=color:#ae81ff>4.413030E-05</span>, \
+               <span style=color:#ae81ff>1.057734E-06</span>, <span style=color:#f92672>-</span><span style=color:#ae81ff>1.052755E-08</span>, \
+             ]
+    <span style=color:#66d9ef>elif</span> tcV <span style=color:#f92672>&lt;</span> <span style=color:#ae81ff>54.886</span>:
+        b <span style=color:#f92672>=</span> [ <span style=color:#f92672>-</span><span style=color:#ae81ff>1.318058E+02</span>,  <span style=color:#ae81ff>4.830222E+01</span>, \
+              <span style=color:#f92672>-</span><span style=color:#ae81ff>1.646031E+00</span>,  <span style=color:#ae81ff>5.464731E-02</span>, \
+              <span style=color:#f92672>-</span><span style=color:#ae81ff>9.650715E-04</span>,  <span style=color:#ae81ff>8.802193E-06</span>, \
+              <span style=color:#f92672>-</span><span style=color:#ae81ff>3.110810E-08</span>,  <span style=color:#ae81ff>0.000000E+00</span>, \
+               <span style=color:#ae81ff>0.000000E+00</span>,  <span style=color:#ae81ff>0.000000E+00</span>, \
+             ]
+    <span style=color:#66d9ef>else</span>:
+        <span style=color:#66d9ef>print</span>(<span style=color:#e6db74>&#39;voltage error&#39;</span>)
+        <span style=color:#66d9ef>return</span> None
+    temp <span style=color:#f92672>=</span> <span style=color:#ae81ff>0</span>
+    <span style=color:#66d9ef>for</span> index, element <span style=color:#f92672>in</span> enumerate(b):
+        temp <span style=color:#f92672>+=</span> element <span style=color:#f92672>*</span> sumV<span style=color:#f92672>**</span>index
+    <span style=color:#66d9ef>return</span> temp
+</code></pre></div><p>Cheap little SPI-interfaced breakout boards are <a href=https://www.adafruit.com/product/269>sold by Adafruit</a>.</p><hr></div></div><div class=row><div class="col-md-offset-1 col-md-10" style=display:flex;justify-content:space-between><div>Tagged
+#<a href=/tags/python>python</a>
+,
+#<a href=/tags/thermocouple>thermocouple</a>
+,
+#<a href=/tags/raspberry-pi>raspberry pi</a>
+,
+#<a href=/tags/max31855>MAX31855</a>
+,
+#<a href=/tags/spi>SPI</a>
+,
+#<a href=/tags/nist>NIST</a></div><div><span class="label label-primary">2016-08-15</span></div></div></div><div class=row><div class=col-md-12><hr></div></div><div class=row><div class="col-md-offset-1 col-md-10"><div id=remark42></div></div></div></div><div class=container><div class="row col-md-12"><footer><div class=pull-left><p>&copy; ~ Powered By <a href=http://hugo.spf13.com>Hugo</a> - version: 0.68.3 ~ <a href=https://creativecommons.org/licenses/by/4.0/>License: CC BY 4.0</a></p></div><div class=pull-right><a href=https://github.com/nagimov target=_blank><i class="fa fa-github-square fa-2x"></i></a></div></footer></div></div></body></html>

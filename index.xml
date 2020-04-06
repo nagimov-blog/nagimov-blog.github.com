@@ -1,18 +1,285 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>the daily meh on the daily meh</title><link>https://nagimov.me/</link><description>Recent content in the daily meh on the daily meh</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Mon, 09 Mar 2020 16:32:01 -0700</lastBuildDate><atom:link href="/" rel="self" type="application/rss+xml"/><item><title>Simple recovery of LUKS-encrypted partitions</title><link>https://nagimov.me/post/simple-recovery-of-luks-encrypted-partitions/</link><pubDate>Mon, 09 Mar 2020 16:32:01 -0700</pubDate><guid>https://nagimov.me/post/simple-recovery-of-luks-encrypted-partitions/</guid><description>
-&lt;p&gt;There are scary number of ways to end up with a screwed up drive encrypted via LUKS:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;accidental wipe/format of the boot partition&lt;/li&gt;
-&lt;li&gt;accidental &lt;code&gt;dd&lt;/code&gt; to a wrong drive (sure, you pressed ^C right away but your grub is gone, sorry)&lt;/li&gt;
-&lt;li&gt;exceedingly &amp;ldquo;smart&amp;rdquo; utilities overwriting MBR or re-initializing encrypted partitions&lt;/li&gt;
-&lt;li&gt;drive/memory failures (power outage, random bit flip, etc.)&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;While there are plenty of advice on how to deal with a classic wiped boot partition scenario, more complicated cases (e.g. when &lt;code&gt;vgscan&lt;/code&gt; can&amp;rsquo;t find LVM partitions) cause hopelessness way too often. Your data is only gone for good when LUKS header or encrypted bytes themselves are corrupted or overwritten. It doesn&amp;rsquo;t take much to deep-dive into a drive and recover encrypted data even if partitioning information is lost.&lt;/p&gt;
-&lt;p&gt;&lt;strong&gt;Mandatory disclaimer:&lt;/strong&gt; always perform your data recovery using a cloned copy of the drive. If you don&amp;rsquo;t know what you are doing - contact data recovery prefessionals. I am not responsible for any loss of data or loss of revenue or profit or any other damages, however caused.&lt;/p&gt;
-&lt;h3 id=&#34;test-environment&#34;&gt;Test environment&lt;/h3&gt;
-&lt;p&gt;I installed debian 10.3.0 with a standard full disk encryption:&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://nagimov.me/images/debian-luks-installation.gif#center&#34; alt=&#34;debian luks installation&#34; /&gt;&lt;/p&gt;
-&lt;p&gt;Here&amp;rsquo;s how partitions look after installation:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ sudo fdisk -l
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>the daily meh on the daily meh</title><link>https://nagimov.me/</link><description>Recent content in the daily meh on the daily meh</description><generator>Hugo -- gohugo.io</generator><language>en-US</language><lastBuildDate>Sat, 01 Jan 2000 00:00:01 -0800</lastBuildDate><atom:link href="/" rel="self" type="application/rss+xml"/><item><title>Simple differential/incremental backups using 7-zip</title><link>https://nagimov.me/post/simple-differential/incremental-backups-using-7-zip/</link><pubDate>Sun, 05 Apr 2020 21:30:50 -0700</pubDate><guid>https://nagimov.me/post/simple-differential/incremental-backups-using-7-zip/</guid><description>&lt;p>Quick, cheap and easy (cheap as in &amp;ldquo;free&amp;rdquo;, &amp;ldquo;free&amp;rdquo; as in &amp;ldquo;freedom&amp;rdquo;) alternative to both heavy backup solutions and lightweight git-repo based backups with much less overhead and better compression: &lt;a href="https://www.7-zip.org">7-zip&lt;/a>.&lt;/p>
+&lt;p>7-zip&amp;rsquo;s &lt;code>-u&lt;/code> switch provides fine-grained control over creating and updating archives based on states of archived and to-be-archived files. The switch is specified as a combination of state-action flags (&lt;a href="https://sevenzip.osdn.jp/chm/cmdline/switches/update.htm">more info&lt;/a>):&lt;/p>
+&lt;table class="table table-dark table-striped table-bordered">
+&lt;thead>
+&lt;tr>
+&lt;th align="center">State&lt;/th>
+&lt;th align="left">State condition&lt;/th>
+&lt;th align="center">File on Disk&lt;/th>
+&lt;th align="center">File in Archive&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td align="center">p&lt;/td>
+&lt;td align="left">File exists in archive, but is not matched with wildcard&lt;/td>
+&lt;td align="center">?&lt;/td>
+&lt;td align="center">Exists, but is not matched&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td align="center">q&lt;/td>
+&lt;td align="left">File exists in archive, but doesn&amp;rsquo;t exist on disk&lt;/td>
+&lt;td align="center">Doesn&amp;rsquo;t exist&lt;/td>
+&lt;td align="center">Exists&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td align="center">r&lt;/td>
+&lt;td align="left">File doesn&amp;rsquo;t exist in archive, but exists on disk&lt;/td>
+&lt;td align="center">Exists&lt;/td>
+&lt;td align="center">Doesn&amp;rsquo;t exist&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td align="center">x&lt;/td>
+&lt;td align="left">File in archive is newer than the file on disk&lt;/td>
+&lt;td align="center">Older&lt;/td>
+&lt;td align="center">Newer&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td align="center">y&lt;/td>
+&lt;td align="left">File in archive is older than the file on disk&lt;/td>
+&lt;td align="center">Newer&lt;/td>
+&lt;td align="center">Older&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td align="center">z&lt;/td>
+&lt;td align="left">File in archive is same as the file on disk&lt;/td>
+&lt;td align="center">Same&lt;/td>
+&lt;td align="center">Same&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td align="center">w&lt;/td>
+&lt;td align="left">Can not be detected what file is newer (times are the same, sizes are different)&lt;/td>
+&lt;td align="center">?&lt;/td>
+&lt;td align="center">?&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;table class="table table-dark table-striped table-bordered">
+&lt;thead>
+&lt;tr>
+&lt;th align="center">Action&lt;/th>
+&lt;th align="left">Description&lt;/th>
+&lt;/tr>
+&lt;/thead>
+&lt;tbody>
+&lt;tr>
+&lt;td align="center">0&lt;/td>
+&lt;td align="left">Ignore file (don&amp;rsquo;t create item in new archive for this file)&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td align="center">1&lt;/td>
+&lt;td align="left">Copy file (copy from old archive to new)&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td align="center">2&lt;/td>
+&lt;td align="left">Compress (compress file from disk to new archive)&lt;/td>
+&lt;/tr>
+&lt;tr>
+&lt;td align="center">3&lt;/td>
+&lt;td align="left">Create Anti-item (item that will delete file or directory during extracting)&lt;/td>
+&lt;/tr>
+&lt;/tbody>
+&lt;/table>
+&lt;p>Full combination of the above states-actions covers every possible backup scenario without any extra file comparison logic.&lt;/p>
+&lt;p>Examples&lt;/p>
+&lt;ul>
+&lt;li>update existing full backup of &lt;code>$HOME/*&lt;/code> directory:
+&lt;ul>
+&lt;li>&lt;code>7z u full_backup.7z $HOME/* -up0q0r2x2y2z1w2&lt;/code>
+&lt;ul>
+&lt;li>&lt;code>p0&lt;/code> - ignore files not matched by wildcard (irrelevant in case of &lt;code>$HOME/*&lt;/code> wildcard)&lt;/li>
+&lt;li>&lt;code>q0&lt;/code> - ignore removed files&lt;/li>
+&lt;li>&lt;code>r2&lt;/code> - if new file was created, compress it&lt;/li>
+&lt;li>&lt;code>x2&lt;/code>, &lt;code>y2&lt;/code> - if file is newer or older, compress it&lt;/li>
+&lt;li>&lt;code>z1&lt;/code> - if file is the same, copy it without compression (this flag significantly reduces compression time)&lt;/li>
+&lt;li>&lt;code>w2&lt;/code> - if in doubt, compress the file&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>create a differential backup of all the files changed since the last full backup was created:
+&lt;ul>
+&lt;li>&lt;code>7z u full_backup.7z -u- -&amp;quot;up0q3r2x2y2z0w2!{differential_backup.7z}&amp;quot; $HOME/*&lt;/code>
+&lt;ul>
+&lt;li>&lt;code>-u-&lt;/code> - &amp;ldquo;dash&amp;rdquo; parameter disables updates in the base archive &lt;code>full_backup.7z&lt;/code>&lt;/li>
+&lt;li>&lt;code>q0&lt;/code> - if file was removed, &amp;ldquo;remember&amp;rdquo; the removal by creating an &amp;ldquo;anti-item&amp;rdquo;&lt;/li>
+&lt;li>&lt;code>z0&lt;/code> - if file is the same, skip it since backup is differential&lt;/li>
+&lt;li>the rest of the flags are the same&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;p>Incremental backups can be achieved by creating &amp;ldquo;decremental&amp;rdquo; backups along the way with a rolling up-to-date full backup (order matters!) in two steps:&lt;/p>
+&lt;ul>
+&lt;li>create a &amp;ldquo;decremental backup&amp;rdquo; between the existing state and the previous full backup, a.k.a. &amp;ldquo;incremental backup&amp;rdquo; between previous and current states:
+&lt;ul>
+&lt;li>&lt;code>7z u full_backup.7z $HOME/* -u- -up1q1r3x1y1z0w1!{incremental_backup.7z}&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>update a full backup to keep track of the existing state:
+&lt;ul>
+&lt;li>&lt;code>7z u full_backup.7z $HOME/* -up0q0r2x2y2z1w2&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;p>Using this approach, files can be rolled back to the state of any incremental backup by simply extracting all the backups in reverse chronological order, e.g. files can be rolled back to &amp;ldquo;three backups back&amp;rdquo; in four steps:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>7z x -y full_backup.7z -o$HOME&lt;/code>&lt;/li>
+&lt;li>&lt;code>7z x -y incremental_backup_2020_04_05.7z -o$HOME&lt;/code>&lt;/li>
+&lt;li>&lt;code>7z x -y incremental_backup_2020_04_04.7z -o$HOME&lt;/code>&lt;/li>
+&lt;li>&lt;code>7z x -y incremental_backup_2020_04_03.7z -o$HOME&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>Thanks to 7-zip&amp;rsquo;s open file format, you can easily peek inside of any incremental/differential backup. Combined with a strong encryption and incredible compression, this makes 7-zip my go-to choice for all of my backups.&lt;/p>
+&lt;p>AFAIK the only way to support development of 7-zip is to use developer&amp;rsquo;s referral link to digital ocean, so please do so if you can :) &lt;a href="https://m.do.co/c/cab893b82fa8">https://m.do.co/c/cab893b82fa8&lt;/a>&lt;/p>
+&lt;h3 id="testing">Testing&lt;/h3>
+&lt;p>Here&amp;rsquo;s a little MWE to test incremental backups.&lt;/p>
+&lt;p>Prepare a test folder (note that I&amp;rsquo;m using &lt;code>echo&lt;/code> instead of &lt;code>touch&lt;/code> so the size of files can be changed and tracked):&lt;/p>
+&lt;pre>&lt;code>cd /tmp
+mkdir test
+echo 'test' &amp;gt;test/1
+echo 'test' &amp;gt;test/2
+mkdir test/3
+echo 'test' &amp;gt;test/3/4
+ls -ld $(find test)
+&lt;/code>&lt;/pre>&lt;p>Get the expected list of 5 byte long files:&lt;/p>
+&lt;pre>&lt;code>drwxr-xr-x 3 nagimov nagimov 4096 Apr 5 21:15 test
+-rw-r--r-- 1 nagimov nagimov 5 Apr 5 21:15 test/1
+-rw-r--r-- 1 nagimov nagimov 5 Apr 5 21:15 test/2
+drwxr-xr-x 2 nagimov nagimov 4096 Apr 5 21:15 test/3
+-rw-r--r-- 1 nagimov nagimov 5 Apr 5 21:15 test/3/4
+&lt;/code>&lt;/pre>&lt;p>Create initial full backup and list its files:&lt;/p>
+&lt;pre>&lt;code>7z a test.7z test/*
+7z l test.7z
+&lt;/code>&lt;/pre>&lt;p>Note the timestamps and file sizes:&lt;/p>
+&lt;pre>&lt;code> Date Time Attr Size Compressed Name
+------------------- ----- ------------ ------------ ------------------------
+2020-04-05 21:15:06 D.... 0 0 test/3
+2020-04-05 21:15:06 ....A 5 19 test/1
+2020-04-05 21:15:06 ....A 5 test/2
+2020-04-05 21:15:06 ....A 5 test/3/4
+------------------- ----- ------------ ------------ ------------------------
+2020-04-05 21:15:06 15 19 3 files, 1 folders
+&lt;/code>&lt;/pre>&lt;p>Increase the size of file &lt;code>2&lt;/code> and create new folder &lt;code>5&lt;/code> with file &lt;code>6&lt;/code>:&lt;/p>
+&lt;pre>&lt;code>echo 'testtest' &amp;gt;test/2
+mkdir test/5
+echo 'testtest' &amp;gt;test/5/6
+ls -ld $(find test)
+&lt;/code>&lt;/pre>&lt;p>Get an expected output - file &lt;code>2&lt;/code> is larger, new file &lt;code>5/6&lt;/code> is appeared:&lt;/p>
+&lt;pre>&lt;code>drwxr-xr-x 4 nagimov nagimov 4096 Apr 5 21:15 test
+-rw-r--r-- 1 nagimov nagimov 5 Apr 5 21:15 test/1
+-rw-r--r-- 1 nagimov nagimov 9 Apr 5 21:15 test/2
+drwxr-xr-x 2 nagimov nagimov 4096 Apr 5 21:15 test/3
+-rw-r--r-- 1 nagimov nagimov 5 Apr 5 21:15 test/3/4
+drwxr-xr-x 2 nagimov nagimov 4096 Apr 5 21:15 test/5
+-rw-r--r-- 1 nagimov nagimov 9 Apr 5 21:15 test/5/6
+&lt;/code>&lt;/pre>&lt;p>Create an incremental backup:&lt;/p>
+&lt;pre>&lt;code>7z u test.7z -u- -up1q1r3x1y1z0w1'!'test_inc1.7z test/*
+7z l test_inc1.7z
+&lt;/code>&lt;/pre>&lt;p>Expectedly, there are only pre-modified versions of modified files in the incremental backup - file &lt;code>2&lt;/code> is still tiny and file &lt;code>5/6&lt;/code> is an &amp;ldquo;anti-item&amp;rdquo; of newly created file (note that its size is 0):&lt;/p>
+&lt;pre>&lt;code> Date Time Attr Size Compressed Name
+------------------- ----- ------------ ------------ ------------------------
+..... 0 0 test/5/6
+D.... 0 0 test/5
+2020-04-05 21:15:06 ....A 5 9 test/2
+------------------- ----- ------------ ------------ ------------------------
+2020-04-05 21:15:06 5 9 2 files, 1 folders
+&lt;/code>&lt;/pre>&lt;p>Update full backup:&lt;/p>
+&lt;pre>&lt;code>7z u test.7z test/* -up0q0r2x2y2z1w2
+7z l test.7z
+&lt;/code>&lt;/pre>&lt;p>It now contains current versions of all the files - larger &lt;code>2&lt;/code> and &lt;code>5/6&lt;/code>:&lt;/p>
+&lt;pre>&lt;code> Date Time Attr Size Compressed Name
+------------------- ----- ------------ ------------ ------------------------
+2020-04-05 21:15:06 D.... 0 0 test/3
+2020-04-05 21:15:31 D.... 0 0 test/5
+2020-04-05 21:15:06 ....A 5 14 test/1
+2020-04-05 21:15:06 ....A 5 test/3/4
+2020-04-05 21:15:31 ....A 9 20 test/2
+2020-04-05 21:15:31 ....A 9 test/5/6
+------------------- ----- ------------ ------------ ------------------------
+2020-04-05 21:15:31 28 34 4 files, 2 folders
+&lt;/code>&lt;/pre>&lt;p>Make &lt;code>2&lt;/code> even larger and remove &lt;code>1&lt;/code>:&lt;/p>
+&lt;pre>&lt;code>echo 'testtesttest' &amp;gt;test/2
+rm test/1
+ls -ld $(find test)
+&lt;/code>&lt;/pre>&lt;p>Now &lt;code>2&lt;/code> is the largest and &lt;code>1&lt;/code> isn&amp;rsquo;t present anymore:&lt;/p>
+&lt;pre>&lt;code>drwxr-xr-x 4 nagimov nagimov 4096 Apr 5 21:16 test
+-rw-r--r-- 1 nagimov nagimov 13 Apr 5 21:16 test/2
+drwxr-xr-x 2 nagimov nagimov 4096 Apr 5 21:15 test/3
+-rw-r--r-- 1 nagimov nagimov 5 Apr 5 21:15 test/3/4
+drwxr-xr-x 2 nagimov nagimov 4096 Apr 5 21:15 test/5
+-rw-r--r-- 1 nagimov nagimov 9 Apr 5 21:15 test/5/6
+&lt;/code>&lt;/pre>&lt;p>Another step of incremental backup:&lt;/p>
+&lt;pre>&lt;code>7z u test.7z -u- -up1q1r3x1y1z0w1'!'test_inc2.7z test/*
+7z l test_inc2.7z
+&lt;/code>&lt;/pre>&lt;p>Pre-modified versions of &lt;code>1&lt;/code> and &lt;code>2&lt;/code> are archived - &lt;code>1&lt;/code> in its original size and &lt;code>2&lt;/code> in its intermediate size:&lt;/p>
+&lt;pre>&lt;code> Date Time Attr Size Compressed Name
+------------------- ----- ------------ ------------ ------------------------
+2020-04-05 21:15:06 ....A 5 9 test/1
+2020-04-05 21:15:31 ....A 9 13 test/2
+------------------- ----- ------------ ------------ ------------------------
+2020-04-05 21:15:31 14 22 2 files
+&lt;/code>&lt;/pre>&lt;p>Another update of the full backup:&lt;/p>
+&lt;pre>&lt;code>7z u test.7z test/* -up0q0r2x2y2z1w2
+7z l test.7z
+&lt;/code>&lt;/pre>&lt;p>Full archive is now up to date:&lt;/p>
+&lt;pre>&lt;code> Date Time Attr Size Compressed Name
+------------------- ----- ------------ ------------ ------------------------
+2020-04-05 21:15:06 D.... 0 0 test/3
+2020-04-05 21:15:31 D.... 0 0 test/5
+2020-04-05 21:15:06 ....A 5 9 test/3/4
+2020-04-05 21:15:31 ....A 9 13 test/5/6
+2020-04-05 21:16:00 ....A 13 17 test/2
+------------------- ----- ------------ ------------ ------------------------
+2020-04-05 21:16:00 27 39 3 files, 2 folders
+&lt;/code>&lt;/pre>&lt;p>Now it&amp;rsquo;s time to roll back through every state of the &lt;code>test&lt;/code> folder:&lt;/p>
+&lt;pre>&lt;code>mkdir unzip
+7z x -y test.7z -ounzip
+ls -ld $(find unzip)
+&lt;/code>&lt;/pre>&lt;p>Latest state with absent &lt;code>1&lt;/code>, beefy 13 bytes long &lt;code>2&lt;/code> and present &lt;code>6&lt;/code>:&lt;/p>
+&lt;pre>&lt;code>drwxr-xr-x 3 nagimov nagimov 4096 Apr 5 21:16 unzip
+drwx------ 4 nagimov nagimov 4096 Apr 5 21:16 unzip/test
+-rw-r--r-- 1 nagimov nagimov 13 Apr 5 21:16 unzip/test/2
+drwxr-xr-x 2 nagimov nagimov 4096 Apr 5 21:15 unzip/test/3
+-rw-r--r-- 1 nagimov nagimov 5 Apr 5 21:15 unzip/test/3/4
+drwxr-xr-x 2 nagimov nagimov 4096 Apr 5 21:15 unzip/test/5
+-rw-r--r-- 1 nagimov nagimov 9 Apr 5 21:15 unzip/test/5/6
+&lt;/code>&lt;/pre>&lt;p>Going back to state inc2:&lt;/p>
+&lt;pre>&lt;code>7z x -y test_inc2.7z -ounzip
+ls -ld $(find unzip)
+&lt;/code>&lt;/pre>&lt;p>Getting &lt;code>1&lt;/code> undeleted and &lt;code>2&lt;/code> thinned to 9 bytes:&lt;/p>
+&lt;pre>&lt;code>drwxr-xr-x 3 nagimov nagimov 4096 Apr 5 21:16 unzip
+drwx------ 4 nagimov nagimov 4096 Apr 5 21:16 unzip/test
+-rw-r--r-- 1 nagimov nagimov 5 Apr 5 21:15 unzip/test/1
+-rw-r--r-- 1 nagimov nagimov 9 Apr 5 21:15 unzip/test/2
+drwxr-xr-x 2 nagimov nagimov 4096 Apr 5 21:15 unzip/test/3
+-rw-r--r-- 1 nagimov nagimov 5 Apr 5 21:15 unzip/test/3/4
+drwxr-xr-x 2 nagimov nagimov 4096 Apr 5 21:15 unzip/test/5
+-rw-r--r-- 1 nagimov nagimov 9 Apr 5 21:15 unzip/test/5/6
+&lt;/code>&lt;/pre>&lt;p>Going back to initial state:&lt;/p>
+&lt;pre>&lt;code>7z x -y test_inc1.7z -ounzip
+ls -ld $(find unzip)
+&lt;/code>&lt;/pre>&lt;p>Getting &lt;code>5/6&lt;/code> uncreated and &lt;code>2&lt;/code> thinned to 5 bytes:&lt;/p>
+&lt;pre>&lt;code>drwxr-xr-x 3 nagimov nagimov 4096 Apr 5 21:16 unzip
+drwx------ 3 nagimov nagimov 4096 Apr 5 21:17 unzip/test
+-rw-r--r-- 1 nagimov nagimov 5 Apr 5 21:15 unzip/test/1
+-rw-r--r-- 1 nagimov nagimov 5 Apr 5 21:15 unzip/test/2
+drwxr-xr-x 2 nagimov nagimov 4096 Apr 5 21:15 unzip/test/3
+-rw-r--r-- 1 nagimov nagimov 5 Apr 5 21:15 unzip/test/3/4
+&lt;/code>&lt;/pre></description></item><item><title>Simple recovery of LUKS-encrypted partitions</title><link>https://nagimov.me/post/simple-recovery-of-luks-encrypted-partitions/</link><pubDate>Mon, 09 Mar 2020 16:32:01 -0700</pubDate><guid>https://nagimov.me/post/simple-recovery-of-luks-encrypted-partitions/</guid><description>&lt;p>There are scary number of ways to end up with a screwed up drive encrypted via LUKS:&lt;/p>
+&lt;ul>
+&lt;li>accidental wipe/format of the boot partition&lt;/li>
+&lt;li>accidental &lt;code>dd&lt;/code> to a wrong drive (sure, you pressed ^C right away but your grub is gone, sorry)&lt;/li>
+&lt;li>exceedingly &amp;ldquo;smart&amp;rdquo; utilities overwriting MBR or re-initializing encrypted partitions&lt;/li>
+&lt;li>drive/memory failures (power outage, random bit flip, etc.)&lt;/li>
+&lt;/ul>
+&lt;p>While there are plenty of advice on how to deal with a classic wiped boot partition scenario, more complicated cases (e.g. when &lt;code>vgscan&lt;/code> can&amp;rsquo;t find LVM partitions) cause hopelessness way too often. Your data is only gone for good when LUKS header or encrypted bytes themselves are corrupted or overwritten. It doesn&amp;rsquo;t take much to deep-dive into a drive and recover encrypted data even if partitioning information is lost.&lt;/p>
+&lt;p>&lt;strong>Mandatory disclaimer:&lt;/strong> always perform your data recovery using a cloned copy of the drive. If you don&amp;rsquo;t know what you are doing - contact data recovery prefessionals. I am not responsible for any loss of data or loss of revenue or profit or any other damages, however caused.&lt;/p>
+&lt;h3 id="test-environment">Test environment&lt;/h3>
+&lt;p>I installed debian 10.3.0 with a standard full disk encryption:&lt;/p>
+&lt;p>&lt;img src="https://nagimov.me/images/debian-luks-installation.gif#center" alt="debian luks installation">&lt;/p>
+&lt;p>Here&amp;rsquo;s how partitions look after installation:&lt;/p>
+&lt;pre>&lt;code>user@debian:~$ sudo fdisk -l
 Disk /dev/sda: 8 GiB, 8589934592 bytes, 16777216 sectors
 Disk model: VBOX HARDDISK
 Units: sectors of 1 * 512 = 512 bytes
@@ -36,26 +303,22 @@ Disk /dev/mapper/debian--vg-swap_1: 1020 MiB, 1069547520 bytes, 2088960 sectors
 Units: sectors of 1 * 512 = 512 bytes
 Sector size (logical/physical): 512 bytes / 512 bytes
 I/O size (minimum/optimal): 512 bytes / 512 bytes
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;As a test file for recovery, I created a 1GB file with random data in my home directory:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ head -c 1G &amp;lt;/dev/urandom &amp;gt;~/test_file
+&lt;/code>&lt;/pre>&lt;p>As a test file for recovery, I created a 1GB file with random data in my home directory:&lt;/p>
+&lt;pre>&lt;code>user@debian:~$ head -c 1G &amp;lt;/dev/urandom &amp;gt;~/test_file
 user@debian:~$ md5sum ~/test_file
 20b731225ecb7260c1155da750f810d3 /home/user/test_file
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;In order to test the worst (but still recoverable) failure scenario, I erased LVM partitioning metadata. LUKS reserves 2 MiB for its headers so I&amp;rsquo;m preserving that, and calculating size of LVM metadata area using &lt;code&gt;fdisk&lt;/code&gt; output:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ sudo dd if=/dev/zero of=/dev/sda5 bs=512 seek=4096 count=$(((8315207680-7226785792-1069547520)/512-4096))
+&lt;/code>&lt;/pre>&lt;p>In order to test the worst (but still recoverable) failure scenario, I erased LVM partitioning metadata. LUKS reserves 2 MiB for its headers so I&amp;rsquo;m preserving that, and calculating size of LVM metadata area using &lt;code>fdisk&lt;/code> output:&lt;/p>
+&lt;pre>&lt;code>user@debian:~$ sudo dd if=/dev/zero of=/dev/sda5 bs=512 seek=4096 count=$(((8315207680-7226785792-1069547520)/512-4096))
 32768+0 records in
 32768+0 records out
 16777216 bytes (17 MB, 16 MiB) copied, 0.796235 s, 21.1 MB/s
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;And since I&amp;rsquo;m dd-ing left and right anyways, I might as well wipe MBR of the drive:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ sudo dd if=/dev/zero of=/dev/sda bs=512 count=1
+&lt;/code>&lt;/pre>&lt;p>And since I&amp;rsquo;m dd-ing left and right anyways, I might as well wipe MBR of the drive:&lt;/p>
+&lt;pre>&lt;code>user@debian:~$ sudo dd if=/dev/zero of=/dev/sda bs=512 count=1
 1+0 records in
 1+0 records out
 512 bytes copied, 0.00791088 s, 64.7 kB/s
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Note that &lt;code&gt;/dev/sda&lt;/code&gt; is now clear of any partitions:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ sudo fdisk -l
+&lt;/code>&lt;/pre>&lt;p>Note that &lt;code>/dev/sda&lt;/code> is now clear of any partitions:&lt;/p>
+&lt;pre>&lt;code>user@debian:~$ sudo fdisk -l
 Disk /dev/sda: 8 GiB, 8589934592 bytes, 16777216 sectors
 Disk model: VBOX HARDDISK
 Units: sectors of 1 * 512 = 512 bytes
@@ -73,14 +336,12 @@ Disk /dev/mapper/debian--vg-swap_1: 1020 MiB, 1069547520 bytes, 2088960 sectors
 Units: sectors of 1 * 512 = 512 bytes
 Sector size (logical/physical): 512 bytes / 512 bytes
 I/O size (minimum/optimal): 512 bytes / 512 bytes
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;As expected, I got the error message after reboot:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;FATAL: No bootable media found! System halted.
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;finding-luks-partitions&#34;&gt;Finding LUKS partitions&lt;/h3&gt;
-&lt;p&gt;I&amp;rsquo;m performing my recovery using gparted live-cd environment (iso-images are avavilable from &lt;a href=&#34;https://gparted.org/download.php&#34;&gt;https://gparted.org/download.php&lt;/a&gt;).&lt;/p&gt;
-&lt;p&gt;First, I&amp;rsquo;m verifying that there are indeed no partitions left on the drive to be mounted/decrypted, so I&amp;rsquo;m left with pretty much nothing but the raw bytes (here an extra 2GB disk represents a USB thumb drive):&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ sudo fdisk -l
+&lt;/code>&lt;/pre>&lt;p>As expected, I got the error message after reboot:&lt;/p>
+&lt;pre>&lt;code>FATAL: No bootable media found! System halted.
+&lt;/code>&lt;/pre>&lt;h3 id="finding-luks-partitions">Finding LUKS partitions&lt;/h3>
+&lt;p>I&amp;rsquo;m performing my recovery using gparted live-cd environment (iso-images are avavilable from &lt;a href="https://gparted.org/download.php)">https://gparted.org/download.php)&lt;/a>.&lt;/p>
+&lt;p>First, I&amp;rsquo;m verifying that there are indeed no partitions left on the drive to be mounted/decrypted, so I&amp;rsquo;m left with pretty much nothing but the raw bytes (here an extra 2GB disk represents a USB thumb drive):&lt;/p>
+&lt;pre>&lt;code>user@debian:~$ sudo fdisk -l
 Disk /dev/sda: 8 GiB, 8589934592 bytes, 16777216 sectors
 Disk model: VBOX HARDDISK
 Units: sectors of 1 * 512 = 512 bytes
@@ -99,25 +360,21 @@ Disk /dev/loop0: 303.5 MiB, 317767680 bytes, 620640 sectors
 Units: sectors of 1 * 512 = 512 bytes
 Sector size (logical/physical): 512 bytes / 512 bytes
 I/O size (minimum/optimal): 512 bytes / 512 bytes
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;But the data is still all there and completely intact. In order to locate partitions, I&amp;rsquo;m using the fact that the first four bytes of any LUKS partition are always &lt;code&gt;0x4c 0x55 0x4b 0x53&lt;/code&gt; or &lt;code&gt;LUKS&lt;/code&gt; in ascii. It might take awhile to scan the entire drive, so as soon as the offset of LUKS partition is found, hexdump can be killed via &lt;code&gt;^C&lt;/code&gt;.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ sudo hexdump -C /dev/sda | grep LUKS
+&lt;/code>&lt;/pre>&lt;p>But the data is still all there and completely intact. In order to locate partitions, I&amp;rsquo;m using the fact that the first four bytes of any LUKS partition are always &lt;code>0x4c 0x55 0x4b 0x53&lt;/code> or &lt;code>LUKS&lt;/code> in ascii. It might take awhile to scan the entire drive, so as soon as the offset of LUKS partition is found, hexdump can be killed via &lt;code>^C&lt;/code>.&lt;/p>
+&lt;pre>&lt;code>user@debian:~$ sudo hexdump -C /dev/sda | grep LUKS
 0f500000 4c 55 4b 53 ba be 00 02 00 00 00 00 00 00 40 00 |LUKS..........@.|
 ^C
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Next, loop device can be set up using found offset. Note &lt;code&gt;-r&lt;/code&gt; option - it&amp;rsquo;s safer to set it up as read-only and not risk it being altered.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ sudo losetup -o 0xf500000 -r -f /dev/sda
+&lt;/code>&lt;/pre>&lt;p>Next, loop device can be set up using found offset. Note &lt;code>-r&lt;/code> option - it&amp;rsquo;s safer to set it up as read-only and not risk it being altered.&lt;/p>
+&lt;pre>&lt;code>user@debian:~$ sudo losetup -o 0xf500000 -r -f /dev/sda
 user@debian:~$ sudo losetup -a
 /dev/loop1: [0006]:10205 (/dev/sda), offset 256901120
 /dev/loop0: [2816]:4883 (/run/live/medium/live/filesystem.squashfs)
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Loop device &lt;code&gt;/dev/loop1&lt;/code&gt; now contains bytes from the drive &lt;code&gt;/dev/sda&lt;/code&gt;, starts at the offset &lt;code&gt;0xf500000&lt;/code&gt; and spans to the rest of the drive. The beginning of LUKS partition is caught correctly, but not necessarily the end of it. In practice, this is not an issue.&lt;/p&gt;
-&lt;h3 id=&#34;decrypting-luks-partitions&#34;&gt;Decrypting LUKS partitions&lt;/h3&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ sudo cryptsetup luksOpen /dev/loop1 recovery
+&lt;/code>&lt;/pre>&lt;p>Loop device &lt;code>/dev/loop1&lt;/code> now contains bytes from the drive &lt;code>/dev/sda&lt;/code>, starts at the offset &lt;code>0xf500000&lt;/code> and spans to the rest of the drive. The beginning of LUKS partition is caught correctly, but not necessarily the end of it. In practice, this is not an issue.&lt;/p>
+&lt;h3 id="decrypting-luks-partitions">Decrypting LUKS partitions&lt;/h3>
+&lt;pre>&lt;code>user@debian:~$ sudo cryptsetup luksOpen /dev/loop1 recovery
 Enter passphrase for /dev/sda:
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;At this stage, the passphrase is promted and if entered correctly, decrypted LVM partition is mapped to &lt;code&gt;/dev/mapper/recovery&lt;/code&gt;:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ sudo fdisk -l
+&lt;/code>&lt;/pre>&lt;p>At this stage, the passphrase is promted and if entered correctly, decrypted LVM partition is mapped to &lt;code>/dev/mapper/recovery&lt;/code>:&lt;/p>
+&lt;pre>&lt;code>user@debian:~$ sudo fdisk -l
 Disk /dev/sda: 8 GiB, 8589934592 bytes, 16777216 sectors
 Disk model: VBOX HARDDISK
 Units: sectors of 1 * 512 = 512 bytes
@@ -144,59 +401,54 @@ Disk /dev/mapper/recovery: 7.76 GiB, 8316256256 bytes, 16242688 sectors
 Units: sectors of 1 * 512 = 512 bytes
 Sector size (logical/physical): 512 bytes / 512 bytes
 I/O size (minimum/optimal): 512 bytes / 512 bytes
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;It is unfortunately not mountable directly (even if LVM partition metadata wasn&amp;rsquo;t damaged), since it contains multiple LVM logical volumes and therefore cannot be treated as a single partition.&lt;/p&gt;
-&lt;p&gt;LVM partition metadata was cleared so LVM tools cannot identify any volumes or groups:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ sudo pvscan
+&lt;/code>&lt;/pre>&lt;p>It is unfortunately not mountable directly (even if LVM partition metadata wasn&amp;rsquo;t damaged), since it contains multiple LVM logical volumes and therefore cannot be treated as a single partition.&lt;/p>
+&lt;p>LVM partition metadata was cleared so LVM tools cannot identify any volumes or groups:&lt;/p>
+&lt;pre>&lt;code>user@debian:~$ sudo pvscan
 No matching physical volumes found
 user@debian:~$ sudo vgscan
 user@debian:~$ sudo lvscan
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;However I can scan this volume directly and recover my files using &lt;code&gt;testdisk&lt;/code&gt; in a few easy steps.&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;p&gt;mount external drive and launch testdisk:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ sudo mkdir /media/external
+&lt;/code>&lt;/pre>&lt;p>However I can scan this volume directly and recover my files using &lt;code>testdisk&lt;/code> in a few easy steps.&lt;/p>
+&lt;ul>
+&lt;li>mount external drive and launch testdisk:&lt;/li>
+&lt;/ul>
+&lt;pre>&lt;code>user@debian:~$ sudo mkdir /media/external
 user@debian:~$ sudo mount -t ntfs /dev/sdb1 /media/external
 user@debian:~$ sudo testdisk
-&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
-&lt;li&gt;&lt;p&gt;get my file:&lt;/p&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&lt;img src=&#34;https://nagimov.me/images/testdisk-recovery.gif#center&#34; alt=&#34;testdisk recovery&#34; /&gt;&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;p&gt;and verify its integrity:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;user@debian:~$ md5sum /media/external/home/user/test_file
+&lt;/code>&lt;/pre>&lt;ul>
+&lt;li>get my file:&lt;/li>
+&lt;/ul>
+&lt;p>&lt;img src="https://nagimov.me/images/testdisk-recovery.gif#center" alt="testdisk recovery">&lt;/p>
+&lt;ul>
+&lt;li>and verify its integrity:&lt;/li>
+&lt;/ul>
+&lt;pre>&lt;code>user@debian:~$ md5sum /media/external/home/user/test_file
 20b731225ecb7260c1155da750f810d3 /media/external/home/user/test_file
-&lt;/code&gt;&lt;/pre&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;This is of course overkill in case of a minor failure. E.g. if GRUB doesn&amp;rsquo;t boot due to damaged &lt;code&gt;/boot&lt;/code&gt; partition, it could be restored without loosing the base system using &lt;code&gt;grub-install&lt;/code&gt;. This solution described here is for various more severe failures.&lt;/p&gt;
-&lt;p&gt;P.S. &lt;a href=&#34;https://gitlab.com/cryptsetup/cryptsetup/-/wikis/FrequentlyAskedQuestions#6-backup-and-data-recovery&#34;&gt;Set up you backups already!&lt;/a&gt;&lt;/p&gt;</description></item><item><title>The Horror of PLC Programming</title><link>https://nagimov.me/post/the-horror-of-plc-programming/</link><pubDate>Thu, 03 Oct 2019 19:41:14 -0700</pubDate><guid>https://nagimov.me/post/the-horror-of-plc-programming/</guid><description>
-&lt;p&gt;Consider this simple code snippet&amp;hellip;&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;10 VALVE1_POS = S405_VH(1400)
+&lt;/code>&lt;/pre>&lt;p>This is of course overkill in case of a minor failure. E.g. if GRUB doesn&amp;rsquo;t boot due to damaged &lt;code>/boot&lt;/code> partition, it could be restored without loosing the base system using &lt;code>grub-install&lt;/code>. This solution described here is for various more severe failures.&lt;/p>
+&lt;p>P.S. &lt;a href="https://gitlab.com/cryptsetup/cryptsetup/-/wikis/FrequentlyAskedQuestions#6-backup-and-data-recovery">Set up you backups already!&lt;/a>&lt;/p></description></item><item><title>The Horror of PLC Programming</title><link>https://nagimov.me/post/the-horror-of-plc-programming/</link><pubDate>Thu, 03 Oct 2019 19:41:14 -0700</pubDate><guid>https://nagimov.me/post/the-horror-of-plc-programming/</guid><description>&lt;p>Consider this simple code snippet&amp;hellip;&lt;/p>
+&lt;pre>&lt;code>10 VALVE1_POS = S405_VH(1400)
 20 VALVE2_POS = 80.0
 30 IF VALVE1_POS &amp;gt; 50.0 THEN VALVE3_POS = 99.5 ELSE VALVE3_POS = 0.5
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;&amp;hellip;and let me follow your observations:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;you notice a weird line enumeration, just like in good old BASIC,&lt;/li&gt;
-&lt;li&gt;you see three variables, &lt;code&gt;VALVE1_POS&lt;/code&gt;, &lt;code&gt;VALVE2_POS&lt;/code&gt; and &lt;code&gt;VALVE3_POS&lt;/code&gt;,&lt;/li&gt;
-&lt;li&gt;you find &lt;code&gt;S405_VH(1400)&lt;/code&gt; most likely to be a function call retrieving a position of the valve 1,&lt;/li&gt;
-&lt;li&gt;position of the valve 2 is set to &lt;code&gt;80.0&lt;/code&gt;,&lt;/li&gt;
-&lt;li&gt;following the last if-then-else statement, you realize that the valve 3 position is defined based on the valve 1 position.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Assuming this code compiles to a valid program, can you think of a bug/feature that would cause all three variables to contain value &lt;code&gt;99.5&lt;/code&gt;?&lt;/p&gt;
-&lt;p&gt;Here&amp;rsquo;s another two-liner:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;10 VALVE1_STEP = 10.0
+&lt;/code>&lt;/pre>&lt;p>&amp;hellip;and let me follow your observations:&lt;/p>
+&lt;ul>
+&lt;li>you notice a weird line enumeration, just like in good old BASIC,&lt;/li>
+&lt;li>you see three variables, &lt;code>VALVE1_POS&lt;/code>, &lt;code>VALVE2_POS&lt;/code> and &lt;code>VALVE3_POS&lt;/code>,&lt;/li>
+&lt;li>you find &lt;code>S405_VH(1400)&lt;/code> most likely to be a function call retrieving a position of the valve 1,&lt;/li>
+&lt;li>position of the valve 2 is set to &lt;code>80.0&lt;/code>,&lt;/li>
+&lt;li>following the last if-then-else statement, you realize that the valve 3 position is defined based on the valve 1 position.&lt;/li>
+&lt;/ul>
+&lt;p>Assuming this code compiles to a valid program, can you think of a bug/feature that would cause all three variables to contain value &lt;code>99.5&lt;/code>?&lt;/p>
+&lt;p>Here&amp;rsquo;s another two-liner:&lt;/p>
+&lt;pre>&lt;code>10 VALVE1_STEP = 10.0
 20 VALVE1_END = 90.0
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Considering that the first example compiles and runs successfully, can you think of why the second one fails?&lt;/p&gt;
-&lt;p&gt;If you know the answers, then it is likely a good idea to stop reading now. No need to feed your professional anxieties. The rest are invited to follow through and discover the Horror of PLC Programming.&lt;/p&gt;
-&lt;h3 id=&#34;why-so-basic&#34;&gt;Why so BASIC?&lt;/h3&gt;
-&lt;p&gt;The code you see is indeed written in a limited and slightly deformed subset of BASIC. You may or may not find the lack of &lt;code&gt;LET&lt;/code&gt;&amp;rsquo;s to be awkward, but otherwise these snippets are plain and simple BASIC. There are no arrays with their &lt;code&gt;DIM&lt;/code&gt;&amp;rsquo;s and &lt;code&gt;REDIM&lt;/code&gt;&amp;rsquo;s to screw things up or &lt;a href=&#34;https://stackoverflow.com/questions/18135971/quick-basic-colon-line-separator&#34;&gt;colon controversies&lt;/a&gt;. It&amp;rsquo;s as basic as BASIC gets (sorry).&lt;/p&gt;
-&lt;p&gt;&amp;ldquo;What a weird language choice for controlling valves!&amp;rdquo; you say. &amp;ldquo;What on flat-earth does this have to deal with 2019?&amp;rdquo; you ask. Keep on reading.&lt;/p&gt;
-&lt;p&gt;PLCs are made to be robust and more often than not programmed using &lt;a href=&#34;https://en.wikipedia.org/wiki/Ladder_logic&#34;&gt;ladder logic&lt;/a&gt;. PLC programs aren&amp;rsquo;t meant to be easy to write, but are easy to debug. You&amp;rsquo;ll never find tail-recursion or polymorphism capabilities in PLC languages. There is no unit-testing, you&amp;rsquo;ll test it in the field, attached to a big, heavy, piece of industrial machinery. Many of PLCs lack the most basic concepts like &lt;em&gt;variables&lt;/em&gt;. Ladder logic is never mentioned at hackathons, your local meetups, or &lt;a href=&#34;https://hn.algolia.com/?query=%22ladder%20logic%22&#34;&gt;praised on hacker news&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://nagimov.me/images/ladder-logic-hacker-news.png#center&#34; alt=&#34;width500px&#34; /&gt;&lt;/p&gt;
-&lt;p&gt;&lt;a href=&#34;https://en.wikipedia.org/wiki/Programmable_logic_controller#Invention_and_early_development&#34;&gt;As a natural evolution of electromechanical relay control systems&lt;/a&gt;, ladder logic programming follows similar rules. Here&amp;rsquo;s how a simple PLC program controlling AC unit might look like:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;+----[ ]----+----[ ]----+----( )
+&lt;/code>&lt;/pre>&lt;p>Considering that the first example compiles and runs successfully, can you think of why the second one fails?&lt;/p>
+&lt;p>If you know the answers, then it is likely a good idea to stop reading now. No need to feed your professional anxieties. The rest are invited to follow through and discover the Horror of PLC Programming.&lt;/p>
+&lt;h3 id="why-so-basic">Why so BASIC?&lt;/h3>
+&lt;p>The code you see is indeed written in a limited and slightly deformed subset of BASIC. You may or may not find the lack of &lt;code>LET&lt;/code>'s to be awkward, but otherwise these snippets are plain and simple BASIC. There are no arrays with their &lt;code>DIM&lt;/code>'s and &lt;code>REDIM&lt;/code>'s to screw things up or &lt;a href="https://stackoverflow.com/questions/18135971/quick-basic-colon-line-separator">colon controversies&lt;/a>. It&amp;rsquo;s as basic as BASIC gets (sorry).&lt;/p>
+&lt;p>&amp;ldquo;What a weird language choice for controlling valves!&amp;rdquo; you say. &amp;ldquo;What on flat-earth does this have to deal with 2019?&amp;rdquo; you ask. Keep on reading.&lt;/p>
+&lt;p>PLCs are made to be robust and more often than not programmed using &lt;a href="https://en.wikipedia.org/wiki/Ladder_logic">ladder logic&lt;/a>. PLC programs aren&amp;rsquo;t meant to be easy to write, but are easy to debug. You&amp;rsquo;ll never find tail-recursion or polymorphism capabilities in PLC languages. There is no unit-testing, you&amp;rsquo;ll test it in the field, attached to a big, heavy, piece of industrial machinery. Many of PLCs lack the most basic concepts like &lt;em>variables&lt;/em>. Ladder logic is never mentioned at hackathons, your local meetups, or &lt;a href="https://hn.algolia.com/?query=%22ladder%20logic%22">praised on hacker news&lt;/a>.&lt;/p>
+&lt;p>&lt;img src="https://nagimov.me/images/ladder-logic-hacker-news.png#center" alt="width500px">&lt;/p>
+&lt;p>&lt;a href="https://en.wikipedia.org/wiki/Programmable_logic_controller#Invention_and_early_development">As a natural evolution of electromechanical relay control systems&lt;/a>, ladder logic programming follows similar rules. Here&amp;rsquo;s how a simple PLC program controlling AC unit might look like:&lt;/p>
+&lt;pre>&lt;code>+----[ ]----+----[ ]----+----( )
 | Switch | HiTemp | A/C
 | | |
 | +----[ ]----+
@@ -204,218 +456,213 @@ user@debian:~$ sudo testdisk
 |
 +----[ ]---------[\]---------( )
 A/C Heat Cooling
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Inputs &amp;ldquo;relays&amp;rdquo; are shown as &lt;code&gt;--[ ]--&lt;/code&gt;, outputs are &lt;code&gt;--( )--&lt;/code&gt;. When enough inputs are activated to create a &amp;ldquo;current path&amp;rdquo; to the output, it becomes &amp;ldquo;energized&amp;rdquo;. This worked well for early systems that were designed to replace relay boxes. Spoiled engineers however demanded fancier features, such as integer arithmetic, floating-point operations and even string manipulations. Following the lead of a semiconductor industry, PLC manufacturers complemented their systems with coprocessors for floating-point math and whatnot. Unfortunately, many of them haven&amp;rsquo;t got further, albeit some systems nowadays support &lt;a href=&#34;https://en.wikipedia.org/wiki/Structured_text&#34;&gt;structured text&lt;/a&gt; or even subsets of C/C++.&lt;/p&gt;
-&lt;p&gt;Back to 2019, a current generation of mid-level PLCs from a well known North American manufacturer requires a coprocessor to communicate with serial interfaces. This coprocessor is fancy enough to support floating point math and string manipulations and, you guessed it, is programmed in BASIC. Our happy PLC programmer is eager to use it to its full potential, multiply floats, truncate string and sometimes go crazy extracting square roots.&lt;/p&gt;
-&lt;p&gt;Let&amp;rsquo;s get back to our first example:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;10 VALVE1_POS = S405_VH(1400)
+&lt;/code>&lt;/pre>&lt;p>Inputs &amp;ldquo;relays&amp;rdquo; are shown as &lt;code>--[ ]--&lt;/code>, outputs are &lt;code>--( )--&lt;/code>. When enough inputs are activated to create a &amp;ldquo;current path&amp;rdquo; to the output, it becomes &amp;ldquo;energized&amp;rdquo;. This worked well for early systems that were designed to replace relay boxes. Spoiled engineers however demanded fancier features, such as integer arithmetic, floating-point operations and even string manipulations. Following the lead of a semiconductor industry, PLC manufacturers complemented their systems with coprocessors for floating-point math and whatnot. Unfortunately, many of them haven&amp;rsquo;t got further, albeit some systems nowadays support &lt;a href="https://en.wikipedia.org/wiki/Structured_text">structured text&lt;/a> or even subsets of C/C++.&lt;/p>
+&lt;p>Back to 2019, a current generation of mid-level PLCs from a well known North American manufacturer requires a coprocessor to communicate with serial interfaces. This coprocessor is fancy enough to support floating point math and string manipulations and, you guessed it, is programmed in BASIC. Our happy PLC programmer is eager to use it to its full potential, multiply floats, truncate string and sometimes go crazy extracting square roots.&lt;/p>
+&lt;p>Let&amp;rsquo;s get back to our first example:&lt;/p>
+&lt;pre>&lt;code>10 VALVE1_POS = S405_VH(1400)
 20 VALVE2_POS = 80.0
 30 IF VALVE1_POS &amp;gt; 50.0 THEN VALVE3_POS = 99.5 ELSE VALVE3_POS = 0.5
-&lt;/code&gt;&lt;/pre&gt;
-&lt;h3 id=&#34;the-call-of-mysterious-s405-vh&#34;&gt;The call of mysterious &lt;code&gt;S405_VH&lt;/code&gt;&lt;/h3&gt;
-&lt;p&gt;I know what you&amp;rsquo;re thinking. The mysterious function that appears in the first example has some magical powers and is going to change the global state, hang the execution, or throw a weird uncatchable exception. This is not the case.&lt;/p&gt;
-&lt;p&gt;&lt;code&gt;S405_VH(1400)&lt;/code&gt; simply reads an octal word from specified memory address &lt;code&gt;V1400&lt;/code&gt; in HEX format, hence &lt;code&gt;_VH&lt;/code&gt;. What is an octal word, you ask? Well, it&amp;rsquo;s just two 8-bit memory chunks stitched together, aka 16-bit. No, you can&amp;rsquo;t call it a &amp;ldquo;byte&amp;rdquo;. It&amp;rsquo;s an octal.&lt;/p&gt;
-&lt;p&gt;Why memory is addressed in such a weird way, &lt;code&gt;V1400&lt;/code&gt;? There are two parts: &lt;code&gt;V&lt;/code&gt; indicates a type of memory range. Along with &lt;code&gt;X&lt;/code&gt;, &lt;code&gt;Y&lt;/code&gt;, &lt;code&gt;C&lt;/code&gt;, &lt;code&gt;T&lt;/code&gt;, &lt;code&gt;CT&lt;/code&gt;, &lt;code&gt;S&lt;/code&gt;, &lt;code&gt;SP&lt;/code&gt;, &lt;code&gt;GX&lt;/code&gt; and &lt;code&gt;GY&lt;/code&gt;, it partitions the PLC memory into various &amp;ldquo;types&amp;rdquo;. Some types are inputs, some are outputs, some store timers and counters, some store system configuration parameters. They can store octal words (16&amp;nbsp;bit), single octals (8&amp;nbsp;bit), or deal with individual bits directly.&lt;/p&gt;
-&lt;p&gt;The second part, &lt;code&gt;1400&lt;/code&gt;, is the address of a memory location within the &lt;code&gt;V&lt;/code&gt;&amp;nbsp;memory type range. Since &lt;code&gt;1400&lt;/code&gt; is an octal number, you would write it as &lt;code&gt;01400&lt;/code&gt; in C, or &lt;code&gt;0o1400&lt;/code&gt; in Python, but it&amp;rsquo;s just the semantics of this particular PLC. Everything is an octal. This particular value, &lt;code&gt;0o1400&lt;/code&gt; is the beginning of a specialized sub-range of the &lt;code&gt;V&lt;/code&gt;&amp;nbsp;memory type that spans from &lt;code&gt;0o1400&lt;/code&gt; to &lt;code&gt;0o7377&lt;/code&gt;, it is a so called &amp;ldquo;User Data Types&amp;rdquo; range. &lt;code&gt;V&lt;/code&gt;&amp;nbsp;memory ranges start at &lt;code&gt;0o700&lt;/code&gt;, not &lt;code&gt;0o0&lt;/code&gt; (remember typing &lt;code&gt;org 0x100&lt;/code&gt; in x86 assembly, like, 30 years ago?). There are no variables, only an &amp;ldquo;accumulator&amp;rdquo;. Data management hasn&amp;rsquo;t improved much since &lt;code&gt;mov ax, dx&lt;/code&gt;. The point being that &lt;strong&gt;BASIC is a step ahead&lt;/strong&gt; from native PLC code.&lt;/p&gt;
-&lt;p&gt;(You remember I said that everything is an octal? I lied. When you deal with data, then everything is HEX. Unless it&amp;rsquo;s &lt;a href=&#34;https://en.wikipedia.org/wiki/Binary-coded_decimal&#34;&gt;binary-coded decimal (BCD)&lt;/a&gt;, sometimes. If that&amp;rsquo;s the case, it is programmer&amp;rsquo;s responsibility to ensure that BCD-HEX conversions are handled properly, compile time checks don&amp;rsquo;t catch that.)&lt;/p&gt;
-&lt;h3 id=&#34;what-s-wrong-with-the-valves&#34;&gt;What&amp;rsquo;s wrong with the valves&lt;/h3&gt;
-&lt;p&gt;But I digress. We are trying to understand the first line of the first example, &lt;code&gt;VALVE1_POS = S405_VH(1400)&lt;/code&gt;. &amp;ldquo;I know!&amp;rdquo; you say. &amp;ldquo;It returns HEX instead of BCD! Or BCD instead of HEX! Or an integer instead of a float! That&amp;rsquo;s where the bug is!&amp;rdquo; But that would be too easy. So let&amp;rsquo;s assume that &lt;code&gt;S405_VH(1400)&lt;/code&gt; returns exactly what we expect and the variable &lt;code&gt;VALVE1_POS&lt;/code&gt; now contains a legitimate value. And yet, after all three lines are executed, &lt;code&gt;VALVE1_POS&lt;/code&gt;, &lt;code&gt;VALVE2_POS&lt;/code&gt; and &lt;code&gt;VALVE3_POS&lt;/code&gt; all contain value &lt;code&gt;99.5&lt;/code&gt;. &lt;strong&gt;In fact they are all the same variable!&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;Here&amp;rsquo;s how this particular implementation of BASIC identifies variables by their names:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;get the first character of the variable name (A);&lt;/li&gt;
-&lt;li&gt;get the last character of the variable name (B);&lt;/li&gt;
-&lt;li&gt;get the length of the variable name (N);&lt;/li&gt;
-&lt;li&gt;&lt;strong&gt;unique combination of A, B and N defines a variable&lt;/strong&gt;, so &lt;code&gt;VALVE1_POS&lt;/code&gt;, &lt;code&gt;VALVE2_POS&lt;/code&gt; and &lt;code&gt;VALVE3_POS&lt;/code&gt; are interpreted as identical names.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Imagine the world where:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;TEMP1_C&lt;/code&gt; and &lt;code&gt;TEMP2_C&lt;/code&gt; are identical variables;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;VOLT_DAC&lt;/code&gt; and &lt;code&gt;VOLT_ADC&lt;/code&gt; are identical variables;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;TIMER_SET&lt;/code&gt; and &lt;code&gt;TIMER_RST&lt;/code&gt; are identical variables;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;INPUT1_CH3&lt;/code&gt; and &lt;code&gt;INPUT2_CH3&lt;/code&gt; are identical variables;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;PRESSURE_PIPE&lt;/code&gt;, &lt;code&gt;PRESSURE_TUBE&lt;/code&gt; and &lt;code&gt;PRESSURE_GAGE&lt;/code&gt; are all the same thing.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Happy debugging.&lt;/p&gt;
-&lt;h3 id=&#34;two-bugs-in-two-lines&#34;&gt;Two bugs in two lines&lt;/h3&gt;
-&lt;pre&gt;&lt;code&gt;10 VALVE1_STEP = 10.0
+&lt;/code>&lt;/pre>&lt;h3 id="the-call-of-mysterious-s405_vh">The call of mysterious &lt;code>S405_VH&lt;/code>&lt;/h3>
+&lt;p>I know what you&amp;rsquo;re thinking. The mysterious function that appears in the first example has some magical powers and is going to change the global state, hang the execution, or throw a weird uncatchable exception. This is not the case.&lt;/p>
+&lt;p>&lt;code>S405_VH(1400)&lt;/code> simply reads an octal word from specified memory address &lt;code>V1400&lt;/code> in HEX format, hence &lt;code>_VH&lt;/code>. What is an octal word, you ask? Well, it&amp;rsquo;s just two 8-bit memory chunks stitched together, aka 16-bit. No, you can&amp;rsquo;t call it a &amp;ldquo;byte&amp;rdquo;. It&amp;rsquo;s an octal.&lt;/p>
+&lt;p>Why memory is addressed in such a weird way, &lt;code>V1400&lt;/code>? There are two parts: &lt;code>V&lt;/code> indicates a type of memory range. Along with &lt;code>X&lt;/code>, &lt;code>Y&lt;/code>, &lt;code>C&lt;/code>, &lt;code>T&lt;/code>, &lt;code>CT&lt;/code>, &lt;code>S&lt;/code>, &lt;code>SP&lt;/code>, &lt;code>GX&lt;/code> and &lt;code>GY&lt;/code>, it partitions the PLC memory into various &amp;ldquo;types&amp;rdquo;. Some types are inputs, some are outputs, some store timers and counters, some store system configuration parameters. They can store octal words (16 bit), single octals (8 bit), or deal with individual bits directly.&lt;/p>
+&lt;p>The second part, &lt;code>1400&lt;/code>, is the address of a memory location within the &lt;code>V&lt;/code> memory type range. Since &lt;code>1400&lt;/code> is an octal number, you would write it as &lt;code>01400&lt;/code> in C, or &lt;code>0o1400&lt;/code> in Python, but it&amp;rsquo;s just the semantics of this particular PLC. Everything is an octal. This particular value, &lt;code>0o1400&lt;/code> is the beginning of a specialized sub-range of the &lt;code>V&lt;/code> memory type that spans from &lt;code>0o1400&lt;/code> to &lt;code>0o7377&lt;/code>, it is a so called &amp;ldquo;User Data Types&amp;rdquo; range. &lt;code>V&lt;/code> memory ranges start at &lt;code>0o700&lt;/code>, not &lt;code>0o0&lt;/code> (remember typing &lt;code>org 0x100&lt;/code> in x86 assembly, like, 30 years ago?). There are no variables, only an &amp;ldquo;accumulator&amp;rdquo;. Data management hasn&amp;rsquo;t improved much since &lt;code>mov ax, dx&lt;/code>. The point being that &lt;strong>BASIC is a step ahead&lt;/strong> from native PLC code.&lt;/p>
+&lt;p>(You remember I said that everything is an octal? I lied. When you deal with data, then everything is HEX. Unless it&amp;rsquo;s &lt;a href="https://en.wikipedia.org/wiki/Binary-coded_decimal">binary-coded decimal (BCD)&lt;/a>, sometimes. If that&amp;rsquo;s the case, it is programmer&amp;rsquo;s responsibility to ensure that BCD-HEX conversions are handled properly, compile time checks don&amp;rsquo;t catch that.)&lt;/p>
+&lt;h3 id="whats-wrong-with-the-valves">What&amp;rsquo;s wrong with the valves&lt;/h3>
+&lt;p>But I digress. We are trying to understand the first line of the first example, &lt;code>VALVE1_POS = S405_VH(1400)&lt;/code>. &amp;ldquo;I know!&amp;rdquo; you say. &amp;ldquo;It returns HEX instead of BCD! Or BCD instead of HEX! Or an integer instead of a float! That&amp;rsquo;s where the bug is!&amp;rdquo; But that would be too easy. So let&amp;rsquo;s assume that &lt;code>S405_VH(1400)&lt;/code> returns exactly what we expect and the variable &lt;code>VALVE1_POS&lt;/code> now contains a legitimate value. And yet, after all three lines are executed, &lt;code>VALVE1_POS&lt;/code>, &lt;code>VALVE2_POS&lt;/code> and &lt;code>VALVE3_POS&lt;/code> all contain value &lt;code>99.5&lt;/code>. &lt;strong>In fact they are all the same variable!&lt;/strong>&lt;/p>
+&lt;p>Here&amp;rsquo;s how this particular implementation of BASIC identifies variables by their names:&lt;/p>
+&lt;ul>
+&lt;li>get the first character of the variable name (A);&lt;/li>
+&lt;li>get the last character of the variable name (B);&lt;/li>
+&lt;li>get the length of the variable name (N);&lt;/li>
+&lt;li>&lt;strong>unique combination of A, B and N defines a variable&lt;/strong>, so &lt;code>VALVE1_POS&lt;/code>, &lt;code>VALVE2_POS&lt;/code> and &lt;code>VALVE3_POS&lt;/code> are interpreted as identical names.&lt;/li>
+&lt;/ul>
+&lt;p>Imagine the world where:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>TEMP1_C&lt;/code> and &lt;code>TEMP2_C&lt;/code> are identical variables;&lt;/li>
+&lt;li>&lt;code>VOLT_DAC&lt;/code> and &lt;code>VOLT_ADC&lt;/code> are identical variables;&lt;/li>
+&lt;li>&lt;code>TIMER_SET&lt;/code> and &lt;code>TIMER_RST&lt;/code> are identical variables;&lt;/li>
+&lt;li>&lt;code>INPUT1_CH3&lt;/code> and &lt;code>INPUT2_CH3&lt;/code> are identical variables;&lt;/li>
+&lt;li>&lt;code>PRESSURE_PIPE&lt;/code>, &lt;code>PRESSURE_TUBE&lt;/code> and &lt;code>PRESSURE_GAGE&lt;/code> are all the same thing.&lt;/li>
+&lt;/ul>
+&lt;p>Happy debugging.&lt;/p>
+&lt;h3 id="two-bugs-in-two-lines">Two bugs in two lines&lt;/h3>
+&lt;pre>&lt;code>10 VALVE1_STEP = 10.0
 20 VALVE1_END = 90.0
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;This example is similarly annoying. In this particular BASIC world, variables cannot contain any keywords as a part of their names.&lt;/p&gt;
-&lt;p&gt;&lt;code&gt;STEP&lt;/code&gt; is a keyword. &lt;code&gt;END&lt;/code&gt; is a keyword. &lt;code&gt;VALVE1_STEP&lt;/code&gt; and &lt;code&gt;VALVE1_END&lt;/code&gt; aren&amp;rsquo;t valid variable names.&lt;/p&gt;
-&lt;h3 id=&#34;docu-mentation&#34;&gt;Docu&amp;hellip; mentation?&lt;/h3&gt;
-&lt;p&gt;The fun way of discovering these &amp;ldquo;features&amp;rdquo; is of course through endless debugging (there is no actual debugger, you just print your variables to a serial port and catch them at the other end). Okay, let&amp;rsquo;s assume you&amp;rsquo;re keen to RTFM and download manuals from manufacturer&amp;rsquo;s web-site. Unfortunately, they don&amp;rsquo;t contain language specifications. You&amp;rsquo;re not giving up and going through manuals for similar and discontinued modules. One of them describes this behavior as a &amp;ldquo;helpful hint&amp;rdquo; [sic] at the end of a code sample, in the &amp;ldquo;TRANSFER INSTRUCTION&amp;rdquo; chapter of the manual:&lt;/p&gt;
-&lt;p&gt;&lt;em&gt;Helpful Hint: The variables LSB10 and LSB20, CODE15 and CODE25 or REG400 and REG410 will return the same value due to the way that BASIC stores variables. To avoid this problem, use dimensioned variables such as CODE(index) or REG(index).&lt;/em&gt;&lt;/p&gt;
-&lt;p&gt;No wonder you missed that. So you keep debugging. Your programming tool doesn&amp;rsquo;t show any useful messages so you give up trying to google the problem. Days go by, and you make no progress. Desperate, you are seeking for advice. You are knocking at the door of &amp;ldquo;Bob the PLC guy&amp;rdquo; who is retiring in two days. You&amp;rsquo;re hiding your tears and trying to stay calm. He looks at your code and smiles, pulls up an old IBM Thinkpad with Windows&amp;nbsp;2000 and launches a weird looking version of the programming tool. He then presses &lt;code&gt;F1&lt;/code&gt; and Microsoft Windows Help shows up. He types &amp;ldquo;variables&amp;rdquo; in the search bar and finds the page he needs. You look at the page, and you look at the guy. You&amp;rsquo;re angry and happy at the same time. You copy the help file and thank Bob. You leave early that day and head to your favorite bar to have a little celebration. You are now a &amp;ldquo;Level&amp;nbsp;2 PLC guy&amp;rdquo;.&lt;/p&gt;
-&lt;hr&gt;
-&lt;h4 id=&#34;all-characters-and-other-entities-appearing-in-this-story-are-fictitious-any-resemblance-to-real-persons-dead-or-alive-or-other-real-life-entities-past-or-present-is-purely-coincidental&#34;&gt;&lt;em&gt;All characters and other entities appearing in this story are fictitious. Any resemblance to real persons, dead or alive, or other real-life entities, past or present, is purely coincidental.&lt;/em&gt;&lt;/h4&gt;</description></item><item><title>Running docker on 32-bit hosts</title><link>https://nagimov.me/post/running-docker-on-32-bit-hosts/</link><pubDate>Sun, 03 Feb 2019 00:42:28 -0800</pubDate><guid>https://nagimov.me/post/running-docker-on-32-bit-hosts/</guid><description>
-&lt;p&gt;Docker is known to not to support 32-bit hosts. As per their &lt;a href=&#34;https://docs.docker.com/install/linux/docker-ce/debian&#34;&gt;debian installation instruction&lt;/a&gt;: &lt;code&gt;Docker CE is supported on x86_64 (or amd64), armhf, and arm64 architectures.&lt;/code&gt; And that is plain wrong.&lt;/p&gt;
-&lt;p&gt;A tiny bit of extra support from docker-the-company would extend its use to older hardware, but (apparently) this is not a priority. &amp;ldquo;Let&amp;rsquo;s bring docker on 32-bit&amp;rdquo; &lt;a href=&#34;https://github.com/moby/moby/issues/136&#34;&gt;issue&lt;/a&gt; was closed and locked in 2014, and nothing has changed since then.&lt;/p&gt;
-&lt;p&gt;Nothing fundamentally prevents docker (including latest version of docker CE) from being run on 32-bit platforms (except the lack of support from docker-the-company, of course). I&amp;rsquo;m currently running (a bit outdated) version &lt;code&gt;18.03.0-ce&lt;/code&gt; of docker on 15 years old &lt;a href=&#34;https://www-01.ibm.com/common/ssi/cgi-bin/ssialias?infotype=AN&amp;amp;subtype=CA&amp;amp;htmlfid=897/ENUS104-011&#34;&gt;IBM xSeries 335 server&lt;/a&gt; with whopping 2.8GHz Intel Xeon and 4GB of DDR RAM (just for the sake of it, of course). That&amp;rsquo;s enough to run half a dozen containers (nginx proxy with simple API end points) and a bunch of scripts poking at various sensors via &lt;a href=&#34;https://labjack.com/&#34;&gt;LabJack IO board&lt;/a&gt;).&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://nagimov.me/images/ibm-xseries-335.jpg#center&#34; alt=&#34;width500px&#34; /&gt;&lt;/p&gt;
-&lt;p&gt;The server only supports IDE drives and I had to use a floppy diskette to sideload firmware for the network card (USB port wasn&amp;rsquo;t recognized by debian installer). This particular server been in &lt;sup&gt;24&lt;/sup&gt;&amp;frasl;&lt;sub&gt;7&lt;/sub&gt; operation since its birth, with a brief interruption for two years in 2013-2014, when its ownership has changed (yeah, I picked it from the scrap yard). I have two complete replacement spares and I don&amp;rsquo;t care about electricity bill, so it&amp;rsquo;s good enough piece of hardware for some lightweight business. Also check out its early 2000&amp;rsquo;s boot animation (how can one simply retire such a fine piece of equipment?!):&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://nagimov.me/images/ibm-xseries-335-boot-diskette.gif#center&#34; alt=&#34;width300px&#34; /&gt;&lt;/p&gt;
-&lt;p&gt;There are obviously no official docker builds for 32-bit platforms, but &lt;a href=&#34;https://github.com/mforkel/docker-ce-i386&#34;&gt;this fork&lt;/a&gt; adds support for building docker CE for i386. It is slightly outdated (&lt;code&gt;18.03.0-ce&lt;/code&gt; as of February 2019), albeit I can&amp;rsquo;t remember any sweet features released since then anyways (yet).&lt;/p&gt;
-&lt;p&gt;The build scripts are x64 platform oriented, so if you can build docker on 64-bit platform first, the recipe should work as-is.&lt;/p&gt;
-&lt;p&gt;I decided to challenge myself and try to run the whole installation using only 32-bit server, so there were few changes required to complete the build.&lt;/p&gt;
-&lt;h4 id=&#34;prerequisites&#34;&gt;Prerequisites&lt;/h4&gt;
-&lt;ul&gt;
-&lt;li&gt;debian 9.5.0 32-bit installed&lt;/li&gt;
-&lt;li&gt;apt repositories configured to use internet connection&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;sudo&lt;/code&gt;, &lt;code&gt;git&lt;/code&gt; and &lt;code&gt;build-essential&lt;/code&gt; installed in addition to bare debian image&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h4 id=&#34;installing-docker-io&#34;&gt;Installing &lt;code&gt;docker-io&lt;/code&gt;&lt;/h4&gt;
-&lt;p&gt;The above mentioned build scripts for docker make use of existing docker installation. So if we want to build docker for 32-bit platform, we have to have docker installed (&lt;code&gt;WinRAR.rar&lt;/code&gt;, anyone?)&lt;/p&gt;
-&lt;p&gt;As hopeless as it sounds, there is a way out. &lt;code&gt;Docker.io&lt;/code&gt; package from &lt;code&gt;jessie-backports&lt;/code&gt; is actually &lt;em&gt;runnable&lt;/em&gt; on 32-bit, even though there is a big red flag in the &lt;a href=&#34;https://packages.debian.org/jessie-backports/docker.io&#34;&gt;description&lt;/a&gt;: &lt;code&gt;Using docker.io on non-amd64 hosts is not supported at this time. Please be careful when using it on anything besides amd64.&lt;/code&gt; We are not going to use &lt;code&gt;docker.io&lt;/code&gt; in production, and it works fine as a simple build environment.&lt;/p&gt;
-&lt;p&gt;Install the package:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;add &lt;code&gt;deb https://deb.debian.org/debian jessie-backports main&lt;/code&gt; to your apt sources in &lt;code&gt;/etc/apt/sources.list&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;update package index: &lt;code&gt;sudo apt-get update&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;install the package: &lt;code&gt;sudo apt-get -t jessie-backports install docker.io&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;check the version of docker binary: &lt;code&gt;docker -v&lt;/code&gt; (outputs &lt;code&gt;Docker version 1.6.2, build 7c8fca2&lt;/code&gt;)&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h4 id=&#34;building-docker-from-sources&#34;&gt;Building docker from sources&lt;/h4&gt;
-&lt;p&gt;Let&amp;rsquo;s then get to it and build (relatively) fresh docker from &lt;a href=&#34;https://github.com/mforkel/docker-ce-i386&#34;&gt;this magic repo&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;Clone the repo:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;cd /tmp&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;git clone https://github.com/mforkel/docker-ce-i386&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;cd docker-ce-i386&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Depending from the current state of this github repository, you might have to switch to the proper branch, e.g. &lt;code&gt;git checkout 18.03-i386&lt;/code&gt;, depending from which versions are available. I&amp;rsquo;ll be fixing this build to the latest commit available as of February, 2019, so it&amp;rsquo;s reproducible:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;git checkout c68b084&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Again, the build script assumes that you have relatively fresh version of docker installed already. Our &lt;code&gt;docker.io&lt;/code&gt; is from 2015, and it doesn&amp;rsquo;t support &lt;code&gt;ARG&lt;/code&gt; parameter of Dockerfiles. We need to get rid of it:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;sed -i &amp;quot;s/ARG APT_MIRROR=deb.debian.org/# ARG APT_MIRROR=deb.debian.org/&amp;quot; ./components/engine/contrib/builder/deb/i386/debian-stretch/Dockerfile&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;sed -i &amp;quot;s/\$APT_MIRROR/deb.debian.org/&amp;quot; ./components/engine/contrib/builder/deb/i386/debian-stretch/Dockerfile&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;sed -i &amp;quot;s/ARG APT_MIRROR=deb.debian.org/# ARG APT_MIRROR=deb.debian.org/&amp;quot; ./components/packaging/deb/debian-stretch/Dockerfile.i386&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;sed -i &amp;quot;s/\$APT_MIRROR/deb.debian.org/g&amp;quot; ./components/packaging/deb/debian-stretch/Dockerfile.i386&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;The build script also makes use of the official &lt;code&gt;alpine&lt;/code&gt; image from dockerhub, that is 64-bit. It has to be replaced with &lt;code&gt;i386/alpine&lt;/code&gt; image:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;sed -i &amp;quot;s/alpine/i386\/alpine/&amp;quot; ./components/packaging/deb/Makefile&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Now it&amp;rsquo;s finally time to run the build (be patient):&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;sudo ARCH=i386 DOCKER_BUILD_PKGS=debian-stretch make deb&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Make sure that newly built &lt;code&gt;*.deb&lt;/code&gt; package is there:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;ls ./components/packaging/deb/debbuild/debian-stretch/&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Remove old docker installation:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;sudo apt-get remove docker.io&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Install newly built &lt;code&gt;*.deb&lt;/code&gt; package:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;sudo dpkg -i ./components/packaging/deb/debbuild/debian-stretch/docker-ce_18.03.0~ce-0~debian_i386.deb&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;sudo apt-get install -f&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;And we&amp;rsquo;re done:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;docker -v&lt;/code&gt; (outputs &lt;code&gt;Docker version 18.03.0-ce, build c68b084381&lt;/code&gt;)&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;sudo docker run hello-world&lt;/code&gt;&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h4 id=&#34;getting-32-bit-docker-compose&#34;&gt;Getting 32-bit docker-compose&lt;/h4&gt;
-&lt;p&gt;This one is much easier, since i386 package of &lt;code&gt;docker-compose&lt;/code&gt; is available from &lt;a href=&#34;https://launchpad.net/ubuntu/xenial/i386/docker-compose/1.8.0-2~16.04.1&#34;&gt;this&lt;/a&gt; Ubuntu Xenial repository, so installation is as simple as:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;&lt;code&gt;cd /tmp&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;wget https://launchpadlibrarian.net/314562376/docker-compose_1.8.0-2~16.04.1_all.deb&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;sudo dpkg -i docker-compose_1.8.0-2~16.04.1_all.deb&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;sudo apt-get install -f&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;&lt;code&gt;docker-compose --version&lt;/code&gt; (outputs &lt;code&gt;docker-compose version 1.8.0, build unknown&lt;/code&gt;)&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h4 id=&#34;living-with-docker-on-32-bit&#34;&gt;Living with docker on 32-bit&lt;/h4&gt;
-&lt;p&gt;Bear in mind, this is not the end of the journey. Most of the available images are built using 64-bit binaries (see the above mentioned official &lt;code&gt;alpine&lt;/code&gt; image), so there will be issues. E.g., the very popular &lt;a href=&#34;https://github.com/jwilder/nginx-proxy&#34;&gt;nginx-proxy&lt;/a&gt; uses 64-bit builds of both &lt;a href=&#34;https://github.com/jwilder/docker-gen&#34;&gt;docker-gen&lt;/a&gt; and &lt;a href=&#34;https://github.com/jwilder/forego&#34;&gt;forego&lt;/a&gt;, and based on official &lt;code&gt;nginx:1.11.10&lt;/code&gt; image (based on official &lt;code&gt;debian:jessie&lt;/code&gt; x64), so the corresponding changes are required:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;i386 builds of docker-gen are available from &lt;a href=&#34;https://github.com/jwilder/docker-gen/releases&#34;&gt;releases&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;i386 build of forego can be found &lt;a href=&#34;https://dl.equinox.io/ddollar/forego/stable/archive&#34;&gt;here&lt;/a&gt;&lt;/li&gt;
-&lt;li&gt;bump nginx version to &lt;code&gt;nginx:1.14&lt;/code&gt; - it&amp;rsquo;s built from &lt;code&gt;debian:stretch-slim&lt;/code&gt; x32&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Another example - must-have sibling of nginx-proxy, &lt;a href=&#34;https://github.com/JrCs/docker-letsencrypt-nginx-proxy-companion&#34;&gt;letsencrypt-nginx-proxy-companion&lt;/a&gt;, based on official &lt;code&gt;alpine&lt;/code&gt; image x64 and uses &lt;a href=&#34;https://github.com/jwilder/docker-gen&#34;&gt;docker-gen&lt;/a&gt; as well, therefore:&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;replace &lt;code&gt;alpine&lt;/code&gt; with &lt;code&gt;i386/alpine&lt;/code&gt;&lt;/li&gt;
-&lt;li&gt;replace &lt;code&gt;docker-gen&lt;/code&gt; with i386 build&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;&amp;hellip;and so on. Some images of course are just not worth porting back to 32-bit world, so usage of docker on 32-bit platforms is limited by simple images, but that&amp;rsquo;s 90% of all my use-cases anyways :)&lt;/p&gt;</description></item><item><title>alsa-utils&#39; arecord bug: lots of *.wav files, ignoring --duration parameter</title><link>https://nagimov.me/post/alsa-utils-arecord-bug-lots-of-wav-files-ignoring-duration-parameter/</link><pubDate>Thu, 18 Aug 2016 20:56:00 -0800</pubDate><guid>https://nagimov.me/post/alsa-utils-arecord-bug-lots-of-wav-files-ignoring-duration-parameter/</guid><description>&lt;p&gt;&lt;img src=&#34;https://nagimov.me/images/alsamixer.png#center&#34; alt=&#34;width500px&#34; /&gt;&lt;/p&gt;
-&lt;p&gt;While working on a little side project, I found that I can&amp;rsquo;t record sound using Raspberry Pi with external USB sound card after upgrading it to Raspbian Jessie. Symptoms look rather weird: &lt;code&gt;arecord&lt;/code&gt; doesn&amp;rsquo;t stop recording after a period of time specified by &lt;code&gt;--duration&lt;/code&gt; flag, but keeps running and writing garbage to files like &lt;code&gt;*-01.wav&lt;/code&gt;, &lt;code&gt;*-02.wav&lt;/code&gt; and so on. Google doesn&amp;rsquo;t really give any solution to this (except &lt;a href=&#34;http://superuser.com/questions/583826/recording-using-arecord-creates-thousands-of-files&#34;&gt;the recommendation&lt;/a&gt; of terminating &lt;code&gt;arecord&lt;/code&gt; using &lt;code&gt;killall -KILL arecord&lt;/code&gt; after certain period of time). USB microphones are &lt;a href=&#34;https://www.raspberrypi.org/forums/viewtopic.php?f=66&amp;amp;t=138722&#34;&gt;also affected&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;Considering I have another Raspberry Pi running Wheezy and having no problems at all (and being free of systemd malware ;) that looks like a bug of &lt;code&gt;arecord&lt;/code&gt;. Debian Jessie &lt;a href=&#34;https://packages.debian.org/jessie/alsa-utils&#34;&gt;includes&lt;/a&gt; &lt;code&gt;alsa-utils&lt;/code&gt; of version &lt;code&gt;1.0.28&lt;/code&gt; and &lt;code&gt;arecord --version&lt;/code&gt; on my Raspbian (image &lt;code&gt;2016-05-27-raspbian-jessie.img&lt;/code&gt;) gives the same. Here is &lt;a href=&#34;http://superuser.com/questions/583826/recording-using-arecord-creates-thousands-of-files&#34;&gt;the report&lt;/a&gt; that version &lt;code&gt;1.0.27&lt;/code&gt; of Linux Arch also suffers from that. Debian Wheezy &lt;a href=&#34;https://packages.debian.org/wheezy/alsa-utils&#34;&gt;has&lt;/a&gt; alsa-utils &lt;code&gt;1.0.25&lt;/code&gt; and it&amp;rsquo;s free of this bug. Hence, the bug was introduced in either &lt;code&gt;1.0.26&lt;/code&gt; or &lt;code&gt;1.0.27&lt;/code&gt; version of &lt;code&gt;alsa-utils&lt;/code&gt;, and downgrading it to a version below &lt;code&gt;1.0.26&lt;/code&gt; should help.&lt;/p&gt;
-&lt;p&gt;Here is how to do that in Raspbian Jessie (change the repo url according to your version):&lt;/p&gt;
-&lt;ul&gt;
-&lt;li&gt;Firstly we are adding Wheezy&amp;rsquo;s repo to the system. Add &lt;code&gt;deb http://mirrordirector.raspbian.org/raspbian/ wheezy main contrib non-free rpi&lt;/code&gt; line to the end of &lt;code&gt;/etc/apt/sources.list&lt;/code&gt; file.&lt;/li&gt;
-&lt;li&gt;Update the sources: &lt;code&gt;sudo apt-get update&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;Check available versions of the package: &lt;code&gt;sudo aptitude versions alsa-utils&lt;/code&gt;. This should indicate that an older version of &lt;code&gt;alsa-utils&lt;/code&gt; is now available.&lt;/li&gt;
-&lt;li&gt;Install the older version (whichever is available): &lt;code&gt;sudo apt-get install alsa-utils=1.0.25-4&lt;/code&gt;.&lt;/li&gt;
-&lt;li&gt;Now verify that &lt;code&gt;arecord&lt;/code&gt; works fine. For USB sound card detected as a device #1, command is as follows: &lt;code&gt;arecord -D plughw:1,0 -r 44100 -f cd -d 5 -vv ~/test.wav&lt;/code&gt;. Recording should stop in 5 seconds.&lt;/li&gt;
-&lt;li&gt;Revert the changes made to &lt;code&gt;/etc/apt/sources.list&lt;/code&gt; (just comment the newly added line) and update the sources again: &lt;code&gt;sudo apt-get update&lt;/code&gt;.&lt;/li&gt;
-&lt;/ul&gt;
-&lt;p&gt;Have fun arecording!&lt;/p&gt;</description></item><item><title>Calibrating MAX31855 thermocouple amplifier</title><link>https://nagimov.me/post/max31855-thermocouple-amplifier/</link><pubDate>Mon, 15 Aug 2016 17:55:00 -0800</pubDate><guid>https://nagimov.me/post/max31855-thermocouple-amplifier/</guid><description>&lt;p&gt;&lt;img src=&#34;https://nagimov.me/images/MAX31855-K-Type-Thermocouple-Breakout-Board.png#floatright&#34; alt=&#34;width300px&#34; /&gt;&lt;/p&gt;
-&lt;p&gt;I have recently spent some time playing with &lt;a href=&#34;https://www.maximintegrated.com/en/products/analog/sensors-and-sensor-interface/MAX31855.html&#34;&gt;Maxim 31855 chips&lt;/a&gt;, in a need of a precise and cheap K-type thermocouple logger. It is a simple voltage amplifier with digital SPI interface, so it works perfectly well with Raspberry Pi or Arduino.&lt;/p&gt;
-&lt;p&gt;There are many thermocouple amplifiers out there, and I am sure that most of them are properly calibrated for temperatures around +/-50C, since even linear volt-to-degreeC conversion works fine in that range. It is only when it comes to extremely low/high temperatures, non-linearities tend to mess up the readings.&lt;/p&gt;
-&lt;p&gt;Maxim 31855 uses a simple linear millivolts-to-degrees conversion through &lt;code&gt;0.041276&lt;/code&gt; factor (i.e. 1&amp;nbsp;millivolt junction potential is 0.04&amp;nbsp;degrees&amp;nbsp;C). That gives a way to reverse calculate the potential. We can then use more sophisticated &lt;a href=&#34;http://srdata.nist.gov/its90/download/type_k.tab&#34;&gt;NIST formulation&lt;/a&gt; to find the temperature difference between junctions:&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-python&#34;&gt;from math import exp
-def nist_tc(tc, cj): # tc - thermocouple, cj - cold junction
-tcV = (tc - cj) * 0.041276
-cjV = \
--0.176004136860E-01 + \
-0.389212049750E-01 * cj + \
-0.185587700320E-04 * cj**2.0 + \
--0.994575928740E-07 * cj**3.0 + \
-0.318409457190E-09 * cj**4.0 + \
--0.560728448890E-12 * cj**5.0 + \
-0.560750590590E-15 * cj**6.0 + \
--0.320207200030E-18 * cj**7.0 + \
-0.971511471520E-22 * cj**8.0 + \
--0.121047212750E-25 * cj**9.0 + \
-0.118597600000E+00 * \
-exp(-0.118343200000E-03 * (cj - 0.126968600000E+03)**2.0)
-sumV = tcV + cjV
-if tcV &amp;lt; 0:
-b = [ 0.0000000E+00, 2.5173462E+01, \
--1.1662878E+00, -1.0833638E+00, \
--8.9773540E-01, -3.7342377E-01, \
--8.6632643E-02, -1.0450598E-02, \
--5.1920577E-04, 0.0000000E+00, \
+&lt;/code>&lt;/pre>&lt;p>This example is similarly annoying. In this particular BASIC world, variables cannot contain any keywords as a part of their names.&lt;/p>
+&lt;p>&lt;code>STEP&lt;/code> is a keyword. &lt;code>END&lt;/code> is a keyword. &lt;code>VALVE1_STEP&lt;/code> and &lt;code>VALVE1_END&lt;/code> aren&amp;rsquo;t valid variable names.&lt;/p>
+&lt;h3 id="docu-mentation">Docu&amp;hellip; mentation?&lt;/h3>
+&lt;p>The fun way of discovering these &amp;ldquo;features&amp;rdquo; is of course through endless debugging (there is no actual debugger, you just print your variables to a serial port and catch them at the other end). Okay, let&amp;rsquo;s assume you&amp;rsquo;re keen to RTFM and download manuals from manufacturer&amp;rsquo;s web-site. Unfortunately, they don&amp;rsquo;t contain language specifications. You&amp;rsquo;re not giving up and going through manuals for similar and discontinued modules. One of them describes this behavior as a &amp;ldquo;helpful hint&amp;rdquo; [sic] at the end of a code sample, in the &amp;ldquo;TRANSFER INSTRUCTION&amp;rdquo; chapter of the manual:&lt;/p>
+&lt;p>&lt;em>Helpful Hint: The variables LSB10 and LSB20, CODE15 and CODE25 or REG400 and REG410 will return the same value due to the way that BASIC stores variables. To avoid this problem, use dimensioned variables such as CODE(index) or REG(index).&lt;/em>&lt;/p>
+&lt;p>No wonder you missed that. So you keep debugging. Your programming tool doesn&amp;rsquo;t show any useful messages so you give up trying to google the problem. Days go by, and you make no progress. Desperate, you are seeking for advice. You are knocking at the door of &amp;ldquo;Bob the PLC guy&amp;rdquo; who is retiring in two days. You&amp;rsquo;re hiding your tears and trying to stay calm. He looks at your code and smiles, pulls up an old IBM Thinkpad with Windows 2000 and launches a weird looking version of the programming tool. He then presses &lt;code>F1&lt;/code> and Microsoft Windows Help shows up. He types &amp;ldquo;variables&amp;rdquo; in the search bar and finds the page he needs. You look at the page, and you look at the guy. You&amp;rsquo;re angry and happy at the same time. You copy the help file and thank Bob. You leave early that day and head to your favorite bar to have a little celebration. You are now a &amp;ldquo;Level 2 PLC guy&amp;rdquo;.&lt;/p>
+&lt;!-- raw HTML omitted -->
+&lt;h4 id="all-characters-and-other-entities-appearing-in-this-story-are-fictitious-any-resemblance-to-real-persons-dead-or-alive-or-other-real-life-entities-past-or-present-is-purely-coincidental">&lt;em>All characters and other entities appearing in this story are fictitious. Any resemblance to real persons, dead or alive, or other real-life entities, past or present, is purely coincidental.&lt;/em>&lt;/h4></description></item><item><title>Running docker on 32-bit hosts</title><link>https://nagimov.me/post/running-docker-on-32-bit-hosts/</link><pubDate>Sun, 03 Feb 2019 00:42:28 -0800</pubDate><guid>https://nagimov.me/post/running-docker-on-32-bit-hosts/</guid><description>&lt;p>Docker is known to not to support 32-bit hosts. As per their &lt;a href="https://docs.docker.com/install/linux/docker-ce/debian">debian installation instruction&lt;/a>: &lt;code>Docker CE is supported on x86_64 (or amd64), armhf, and arm64 architectures.&lt;/code> And that is plain wrong.&lt;/p>
+&lt;p>A tiny bit of extra support from docker-the-company would extend its use to older hardware, but (apparently) this is not a priority. &amp;ldquo;Let&amp;rsquo;s bring docker on 32-bit&amp;rdquo; &lt;a href="https://github.com/moby/moby/issues/136">issue&lt;/a> was closed and locked in 2014, and nothing has changed since then.&lt;/p>
+&lt;p>Nothing fundamentally prevents docker (including latest version of docker CE) from being run on 32-bit platforms (except the lack of support from docker-the-company, of course). I&amp;rsquo;m currently running (a bit outdated) version &lt;code>18.03.0-ce&lt;/code> of docker on 15 years old &lt;a href="https://www-01.ibm.com/common/ssi/cgi-bin/ssialias?infotype=AN&amp;amp;subtype=CA&amp;amp;htmlfid=897/ENUS104-011">IBM xSeries 335 server&lt;/a> with whopping 2.8GHz Intel Xeon and 4GB of DDR RAM (just for the sake of it, of course). That&amp;rsquo;s enough to run half a dozen containers (nginx proxy with simple API end points) and a bunch of scripts poking at various sensors via &lt;a href="https://labjack.com/">LabJack IO board&lt;/a>).&lt;/p>
+&lt;p>&lt;img src="https://nagimov.me/images/ibm-xseries-335.jpg#center" alt="width500px">&lt;/p>
+&lt;p>The server only supports IDE drives and I had to use a floppy diskette to sideload firmware for the network card (USB port wasn&amp;rsquo;t recognized by debian installer). This particular server been in 24/7 operation since its birth, with a brief interruption for two years in 2013-2014, when its ownership has changed (yeah, I picked it from the scrap yard). I have two complete replacement spares and I don&amp;rsquo;t care about electricity bill, so it&amp;rsquo;s good enough piece of hardware for some lightweight business. Also check out its early 2000&amp;rsquo;s boot animation (how can one simply retire such a fine piece of equipment?!):&lt;/p>
+&lt;p>&lt;img src="https://nagimov.me/images/ibm-xseries-335-boot-diskette.gif#center" alt="width300px">&lt;/p>
+&lt;p>There are obviously no official docker builds for 32-bit platforms, but &lt;a href="https://github.com/mforkel/docker-ce-i386">this fork&lt;/a> adds support for building docker CE for i386. It is slightly outdated (&lt;code>18.03.0-ce&lt;/code> as of February 2019), albeit I can&amp;rsquo;t remember any sweet features released since then anyways (yet).&lt;/p>
+&lt;p>The build scripts are x64 platform oriented, so if you can build docker on 64-bit platform first, the recipe should work as-is.&lt;/p>
+&lt;p>I decided to challenge myself and try to run the whole installation using only 32-bit server, so there were few changes required to complete the build.&lt;/p>
+&lt;h4 id="prerequisites">Prerequisites&lt;/h4>
+&lt;ul>
+&lt;li>debian 9.5.0 32-bit installed&lt;/li>
+&lt;li>apt repositories configured to use internet connection&lt;/li>
+&lt;li>&lt;code>sudo&lt;/code>, &lt;code>git&lt;/code> and &lt;code>build-essential&lt;/code> installed in addition to bare debian image&lt;/li>
+&lt;/ul>
+&lt;h4 id="installing-docker-io">Installing &lt;code>docker-io&lt;/code>&lt;/h4>
+&lt;p>The above mentioned build scripts for docker make use of existing docker installation. So if we want to build docker for 32-bit platform, we have to have docker installed (&lt;code>WinRAR.rar&lt;/code>, anyone?)&lt;/p>
+&lt;p>As hopeless as it sounds, there is a way out. &lt;code>Docker.io&lt;/code> package from &lt;code>jessie-backports&lt;/code> is actually &lt;em>runnable&lt;/em> on 32-bit, even though there is a big red flag in the &lt;a href="https://packages.debian.org/jessie-backports/docker.io">description&lt;/a>: &lt;code>Using docker.io on non-amd64 hosts is not supported at this time. Please be careful when using it on anything besides amd64.&lt;/code> We are not going to use &lt;code>docker.io&lt;/code> in production, and it works fine as a simple build environment.&lt;/p>
+&lt;p>Install the package:&lt;/p>
+&lt;ul>
+&lt;li>add &lt;code>deb https://deb.debian.org/debian jessie-backports main&lt;/code> to your apt sources in &lt;code>/etc/apt/sources.list&lt;/code>&lt;/li>
+&lt;li>update package index: &lt;code>sudo apt-get update&lt;/code>&lt;/li>
+&lt;li>install the package: &lt;code>sudo apt-get -t jessie-backports install docker.io&lt;/code>&lt;/li>
+&lt;li>check the version of docker binary: &lt;code>docker -v&lt;/code> (outputs &lt;code>Docker version 1.6.2, build 7c8fca2&lt;/code>)&lt;/li>
+&lt;/ul>
+&lt;h4 id="building-docker-from-sources">Building docker from sources&lt;/h4>
+&lt;p>Let&amp;rsquo;s then get to it and build (relatively) fresh docker from &lt;a href="https://github.com/mforkel/docker-ce-i386">this magic repo&lt;/a>.&lt;/p>
+&lt;p>Clone the repo:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>cd /tmp&lt;/code>&lt;/li>
+&lt;li>&lt;code>git clone https://github.com/mforkel/docker-ce-i386&lt;/code>&lt;/li>
+&lt;li>&lt;code>cd docker-ce-i386&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>Depending from the current state of this github repository, you might have to switch to the proper branch, e.g. &lt;code>git checkout 18.03-i386&lt;/code>, depending from which versions are available. I&amp;rsquo;ll be fixing this build to the latest commit available as of February, 2019, so it&amp;rsquo;s reproducible:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>git checkout c68b084&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>Again, the build script assumes that you have relatively fresh version of docker installed already. Our &lt;code>docker.io&lt;/code> is from 2015, and it doesn&amp;rsquo;t support &lt;code>ARG&lt;/code> parameter of Dockerfiles. We need to get rid of it:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>sed -i &amp;quot;s/ARG APT_MIRROR=deb.debian.org/# ARG APT_MIRROR=deb.debian.org/&amp;quot; ./components/engine/contrib/builder/deb/i386/debian-stretch/Dockerfile&lt;/code>&lt;/li>
+&lt;li>&lt;code>sed -i &amp;quot;s/\$APT_MIRROR/deb.debian.org/&amp;quot; ./components/engine/contrib/builder/deb/i386/debian-stretch/Dockerfile&lt;/code>&lt;/li>
+&lt;li>&lt;code>sed -i &amp;quot;s/ARG APT_MIRROR=deb.debian.org/# ARG APT_MIRROR=deb.debian.org/&amp;quot; ./components/packaging/deb/debian-stretch/Dockerfile.i386&lt;/code>&lt;/li>
+&lt;li>&lt;code>sed -i &amp;quot;s/\$APT_MIRROR/deb.debian.org/g&amp;quot; ./components/packaging/deb/debian-stretch/Dockerfile.i386&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>The build script also makes use of the official &lt;code>alpine&lt;/code> image from dockerhub, that is 64-bit. It has to be replaced with &lt;code>i386/alpine&lt;/code> image:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>sed -i &amp;quot;s/alpine/i386\/alpine/&amp;quot; ./components/packaging/deb/Makefile&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>Now it&amp;rsquo;s finally time to run the build (be patient):&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>sudo ARCH=i386 DOCKER_BUILD_PKGS=debian-stretch make deb&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>Make sure that newly built &lt;code>*.deb&lt;/code> package is there:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>ls ./components/packaging/deb/debbuild/debian-stretch/&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>Remove old docker installation:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>sudo apt-get remove docker.io&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>Install newly built &lt;code>*.deb&lt;/code> package:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>sudo dpkg -i ./components/packaging/deb/debbuild/debian-stretch/docker-ce_18.03.0~ce-0~debian_i386.deb&lt;/code>&lt;/li>
+&lt;li>&lt;code>sudo apt-get install -f&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;p>And we&amp;rsquo;re done:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>docker -v&lt;/code> (outputs &lt;code>Docker version 18.03.0-ce, build c68b084381&lt;/code>)&lt;/li>
+&lt;li>&lt;code>sudo docker run hello-world&lt;/code>&lt;/li>
+&lt;/ul>
+&lt;h4 id="getting-32-bit-docker-compose">Getting 32-bit docker-compose&lt;/h4>
+&lt;p>This one is much easier, since i386 package of &lt;code>docker-compose&lt;/code> is available from &lt;a href="https://launchpad.net/ubuntu/xenial/i386/docker-compose/1.8.0-2~16.04.1">this&lt;/a> Ubuntu Xenial repository, so installation is as simple as:&lt;/p>
+&lt;ul>
+&lt;li>&lt;code>cd /tmp&lt;/code>&lt;/li>
+&lt;li>&lt;code>wget https://launchpadlibrarian.net/314562376/docker-compose_1.8.0-2~16.04.1_all.deb&lt;/code>&lt;/li>
+&lt;li>&lt;code>sudo dpkg -i docker-compose_1.8.0-2~16.04.1_all.deb&lt;/code>&lt;/li>
+&lt;li>&lt;code>sudo apt-get install -f&lt;/code>&lt;/li>
+&lt;li>&lt;code>docker-compose --version&lt;/code> (outputs &lt;code>docker-compose version 1.8.0, build unknown&lt;/code>)&lt;/li>
+&lt;/ul>
+&lt;h4 id="living-with-docker-on-32-bit">Living with docker on 32-bit&lt;/h4>
+&lt;p>Bear in mind, this is not the end of the journey. Most of the available images are built using 64-bit binaries (see the above mentioned official &lt;code>alpine&lt;/code> image), so there will be issues. E.g., the very popular &lt;a href="https://github.com/jwilder/nginx-proxy">nginx-proxy&lt;/a> uses 64-bit builds of both &lt;a href="https://github.com/jwilder/docker-gen">docker-gen&lt;/a> and &lt;a href="https://github.com/jwilder/forego">forego&lt;/a>, and based on official &lt;code>nginx:1.11.10&lt;/code> image (based on official &lt;code>debian:jessie&lt;/code> x64), so the corresponding changes are required:&lt;/p>
+&lt;ul>
+&lt;li>i386 builds of docker-gen are available from &lt;a href="https://github.com/jwilder/docker-gen/releases">releases&lt;/a>&lt;/li>
+&lt;li>i386 build of forego can be found &lt;a href="https://dl.equinox.io/ddollar/forego/stable/archive">here&lt;/a>&lt;/li>
+&lt;li>bump nginx version to &lt;code>nginx:1.14&lt;/code> - it&amp;rsquo;s built from &lt;code>debian:stretch-slim&lt;/code> x32&lt;/li>
+&lt;/ul>
+&lt;p>Another example - must-have sibling of nginx-proxy, &lt;a href="https://github.com/JrCs/docker-letsencrypt-nginx-proxy-companion">letsencrypt-nginx-proxy-companion&lt;/a>, based on official &lt;code>alpine&lt;/code> image x64 and uses &lt;a href="https://github.com/jwilder/docker-gen">docker-gen&lt;/a> as well, therefore:&lt;/p>
+&lt;ul>
+&lt;li>replace &lt;code>alpine&lt;/code> with &lt;code>i386/alpine&lt;/code>&lt;/li>
+&lt;li>replace &lt;code>docker-gen&lt;/code> with i386 build&lt;/li>
+&lt;/ul>
+&lt;p>&amp;hellip;and so on. Some images of course are just not worth porting back to 32-bit world, so usage of docker on 32-bit platforms is limited by simple images, but that&amp;rsquo;s 90% of all my use-cases anyways :)&lt;/p></description></item><item><title>alsa-utils' arecord bug: lots of *.wav files, ignoring --duration parameter</title><link>https://nagimov.me/post/alsa-utils-arecord-bug-lots-of-.wav-files-ignoring-duration-parameter/</link><pubDate>Thu, 18 Aug 2016 20:56:00 -0800</pubDate><guid>https://nagimov.me/post/alsa-utils-arecord-bug-lots-of-.wav-files-ignoring-duration-parameter/</guid><description>&lt;p>&lt;img src="https://nagimov.me/images/alsamixer.png#center" alt="width500px">&lt;/p>
+&lt;p>While working on a little side project, I found that I can&amp;rsquo;t record sound using Raspberry Pi with external USB sound card after upgrading it to Raspbian Jessie. Symptoms look rather weird: &lt;code>arecord&lt;/code> doesn&amp;rsquo;t stop recording after a period of time specified by &lt;code>--duration&lt;/code> flag, but keeps running and writing garbage to files like &lt;code>*-01.wav&lt;/code>, &lt;code>*-02.wav&lt;/code> and so on. Google doesn&amp;rsquo;t really give any solution to this (except &lt;a href="http://superuser.com/questions/583826/recording-using-arecord-creates-thousands-of-files">the recommendation&lt;/a> of terminating &lt;code>arecord&lt;/code> using &lt;code>killall -KILL arecord&lt;/code> after certain period of time). USB microphones are &lt;a href="https://www.raspberrypi.org/forums/viewtopic.php?f=66&amp;amp;t=138722">also affected&lt;/a>.&lt;/p>
+&lt;p>Considering I have another Raspberry Pi running Wheezy and having no problems at all (and being free of systemd malware ;) that looks like a bug of &lt;code>arecord&lt;/code>. Debian Jessie &lt;a href="https://packages.debian.org/jessie/alsa-utils">includes&lt;/a> &lt;code>alsa-utils&lt;/code> of version &lt;code>1.0.28&lt;/code> and &lt;code>arecord --version&lt;/code> on my Raspbian (image &lt;code>2016-05-27-raspbian-jessie.img&lt;/code>) gives the same. Here is &lt;a href="http://superuser.com/questions/583826/recording-using-arecord-creates-thousands-of-files">the report&lt;/a> that version &lt;code>1.0.27&lt;/code> of Linux Arch also suffers from that. Debian Wheezy &lt;a href="https://packages.debian.org/wheezy/alsa-utils">has&lt;/a> alsa-utils &lt;code>1.0.25&lt;/code> and it&amp;rsquo;s free of this bug. Hence, the bug was introduced in either &lt;code>1.0.26&lt;/code> or &lt;code>1.0.27&lt;/code> version of &lt;code>alsa-utils&lt;/code>, and downgrading it to a version below &lt;code>1.0.26&lt;/code> should help.&lt;/p>
+&lt;p>Here is how to do that in Raspbian Jessie (change the repo url according to your version):&lt;/p>
+&lt;ul>
+&lt;li>Firstly we are adding Wheezy&amp;rsquo;s repo to the system. Add &lt;code>deb http://mirrordirector.raspbian.org/raspbian/ wheezy main contrib non-free rpi&lt;/code> line to the end of &lt;code>/etc/apt/sources.list&lt;/code> file.&lt;/li>
+&lt;li>Update the sources: &lt;code>sudo apt-get update&lt;/code>.&lt;/li>
+&lt;li>Check available versions of the package: &lt;code>sudo aptitude versions alsa-utils&lt;/code>. This should indicate that an older version of &lt;code>alsa-utils&lt;/code> is now available.&lt;/li>
+&lt;li>Install the older version (whichever is available): &lt;code>sudo apt-get install alsa-utils=1.0.25-4&lt;/code>.&lt;/li>
+&lt;li>Now verify that &lt;code>arecord&lt;/code> works fine. For USB sound card detected as a device #1, command is as follows: &lt;code>arecord -D plughw:1,0 -r 44100 -f cd -d 5 -vv ~/test.wav&lt;/code>. Recording should stop in 5 seconds.&lt;/li>
+&lt;li>Revert the changes made to &lt;code>/etc/apt/sources.list&lt;/code> (just comment the newly added line) and update the sources again: &lt;code>sudo apt-get update&lt;/code>.&lt;/li>
+&lt;/ul>
+&lt;p>Have fun arecording!&lt;/p></description></item><item><title>Calibrating MAX31855 thermocouple amplifier</title><link>https://nagimov.me/post/calibrating-max31855-thermocouple-amplifier/</link><pubDate>Mon, 15 Aug 2016 17:55:00 -0800</pubDate><guid>https://nagimov.me/post/calibrating-max31855-thermocouple-amplifier/</guid><description>&lt;p>&lt;img src="https://nagimov.me/images/MAX31855-K-Type-Thermocouple-Breakout-Board.png#floatright" alt="width300px">&lt;/p>
+&lt;p>I have recently spent some time playing with &lt;a href="https://www.maximintegrated.com/en/products/analog/sensors-and-sensor-interface/MAX31855.html">Maxim 31855 chips&lt;/a>, in a need of a precise and cheap K-type thermocouple logger. It is a simple voltage amplifier with digital SPI interface, so it works perfectly well with Raspberry Pi or Arduino.&lt;/p>
+&lt;p>There are many thermocouple amplifiers out there, and I am sure that most of them are properly calibrated for temperatures around +/-50C, since even linear volt-to-degreeC conversion works fine in that range. It is only when it comes to extremely low/high temperatures, non-linearities tend to mess up the readings.&lt;/p>
+&lt;p>Maxim 31855 uses a simple linear millivolts-to-degrees conversion through &lt;code>0.041276&lt;/code> factor (i.e. 1 millivolt junction potential is 0.04 degrees C). That gives a way to reverse calculate the potential. We can then use more sophisticated &lt;a href="http://srdata.nist.gov/its90/download/type_k.tab">NIST formulation&lt;/a> to find the temperature difference between junctions:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-python" data-lang="python">&lt;span style="color:#f92672">from&lt;/span> math &lt;span style="color:#f92672">import&lt;/span> exp
+&lt;span style="color:#66d9ef">def&lt;/span> &lt;span style="color:#a6e22e">nist_tc&lt;/span>(tc, cj): &lt;span style="color:#75715e"># tc - thermocouple, cj - cold junction
+&lt;/span>
+tcV &lt;span style="color:#f92672">=&lt;/span> (tc &lt;span style="color:#f92672">-&lt;/span> cj) &lt;span style="color:#f92672">*&lt;/span> &lt;span style="color:#ae81ff">0.041276&lt;/span>
+cjV &lt;span style="color:#f92672">=&lt;/span> \
+&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">0.176004136860E-01&lt;/span> &lt;span style="color:#f92672">+&lt;/span> \
+&lt;span style="color:#ae81ff">0.389212049750E-01&lt;/span> &lt;span style="color:#f92672">*&lt;/span> cj &lt;span style="color:#f92672">+&lt;/span> \
+&lt;span style="color:#ae81ff">0.185587700320E-04&lt;/span> &lt;span style="color:#f92672">*&lt;/span> cj&lt;span style="color:#f92672">**&lt;/span>&lt;span style="color:#ae81ff">2.0&lt;/span> &lt;span style="color:#f92672">+&lt;/span> \
+&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">0.994575928740E-07&lt;/span> &lt;span style="color:#f92672">*&lt;/span> cj&lt;span style="color:#f92672">**&lt;/span>&lt;span style="color:#ae81ff">3.0&lt;/span> &lt;span style="color:#f92672">+&lt;/span> \
+&lt;span style="color:#ae81ff">0.318409457190E-09&lt;/span> &lt;span style="color:#f92672">*&lt;/span> cj&lt;span style="color:#f92672">**&lt;/span>&lt;span style="color:#ae81ff">4.0&lt;/span> &lt;span style="color:#f92672">+&lt;/span> \
+&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">0.560728448890E-12&lt;/span> &lt;span style="color:#f92672">*&lt;/span> cj&lt;span style="color:#f92672">**&lt;/span>&lt;span style="color:#ae81ff">5.0&lt;/span> &lt;span style="color:#f92672">+&lt;/span> \
+&lt;span style="color:#ae81ff">0.560750590590E-15&lt;/span> &lt;span style="color:#f92672">*&lt;/span> cj&lt;span style="color:#f92672">**&lt;/span>&lt;span style="color:#ae81ff">6.0&lt;/span> &lt;span style="color:#f92672">+&lt;/span> \
+&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">0.320207200030E-18&lt;/span> &lt;span style="color:#f92672">*&lt;/span> cj&lt;span style="color:#f92672">**&lt;/span>&lt;span style="color:#ae81ff">7.0&lt;/span> &lt;span style="color:#f92672">+&lt;/span> \
+&lt;span style="color:#ae81ff">0.971511471520E-22&lt;/span> &lt;span style="color:#f92672">*&lt;/span> cj&lt;span style="color:#f92672">**&lt;/span>&lt;span style="color:#ae81ff">8.0&lt;/span> &lt;span style="color:#f92672">+&lt;/span> \
+&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">0.121047212750E-25&lt;/span> &lt;span style="color:#f92672">*&lt;/span> cj&lt;span style="color:#f92672">**&lt;/span>&lt;span style="color:#ae81ff">9.0&lt;/span> &lt;span style="color:#f92672">+&lt;/span> \
+&lt;span style="color:#ae81ff">0.118597600000E+00&lt;/span> &lt;span style="color:#f92672">*&lt;/span> \
+exp(&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">0.118343200000E-03&lt;/span> &lt;span style="color:#f92672">*&lt;/span> (cj &lt;span style="color:#f92672">-&lt;/span> &lt;span style="color:#ae81ff">0.126968600000E+03&lt;/span>)&lt;span style="color:#f92672">**&lt;/span>&lt;span style="color:#ae81ff">2.0&lt;/span>)
+sumV &lt;span style="color:#f92672">=&lt;/span> tcV &lt;span style="color:#f92672">+&lt;/span> cjV
+&lt;span style="color:#66d9ef">if&lt;/span> tcV &lt;span style="color:#f92672">&amp;lt;&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>:
+b &lt;span style="color:#f92672">=&lt;/span> [ &lt;span style="color:#ae81ff">0.0000000E+00&lt;/span>, &lt;span style="color:#ae81ff">2.5173462E+01&lt;/span>, \
+&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1.1662878E+00&lt;/span>, &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1.0833638E+00&lt;/span>, \
+&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">8.9773540E-01&lt;/span>, &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">3.7342377E-01&lt;/span>, \
+&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">8.6632643E-02&lt;/span>, &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1.0450598E-02&lt;/span>, \
+&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">5.1920577E-04&lt;/span>, &lt;span style="color:#ae81ff">0.0000000E+00&lt;/span>, \
 ]
-elif tcV &amp;lt; 20.644:
-b = [ 0.000000E+00, 2.508355E+01, \
-7.860106E-02, -2.503131E-01, \
-8.315270E-02, -1.228034E-02, \
-9.804036E-04, -4.413030E-05, \
-1.057734E-06, -1.052755E-08, \
+&lt;span style="color:#66d9ef">elif&lt;/span> tcV &lt;span style="color:#f92672">&amp;lt;&lt;/span> &lt;span style="color:#ae81ff">20.644&lt;/span>:
+b &lt;span style="color:#f92672">=&lt;/span> [ &lt;span style="color:#ae81ff">0.000000E+00&lt;/span>, &lt;span style="color:#ae81ff">2.508355E+01&lt;/span>, \
+&lt;span style="color:#ae81ff">7.860106E-02&lt;/span>, &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">2.503131E-01&lt;/span>, \
+&lt;span style="color:#ae81ff">8.315270E-02&lt;/span>, &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1.228034E-02&lt;/span>, \
+&lt;span style="color:#ae81ff">9.804036E-04&lt;/span>, &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">4.413030E-05&lt;/span>, \
+&lt;span style="color:#ae81ff">1.057734E-06&lt;/span>, &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1.052755E-08&lt;/span>, \
 ]
-elif tcV &amp;lt; 54.886:
-b = [ -1.318058E+02, 4.830222E+01, \
--1.646031E+00, 5.464731E-02, \
--9.650715E-04, 8.802193E-06, \
--3.110810E-08, 0.000000E+00, \
-0.000000E+00, 0.000000E+00, \
+&lt;span style="color:#66d9ef">elif&lt;/span> tcV &lt;span style="color:#f92672">&amp;lt;&lt;/span> &lt;span style="color:#ae81ff">54.886&lt;/span>:
+b &lt;span style="color:#f92672">=&lt;/span> [ &lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1.318058E+02&lt;/span>, &lt;span style="color:#ae81ff">4.830222E+01&lt;/span>, \
+&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">1.646031E+00&lt;/span>, &lt;span style="color:#ae81ff">5.464731E-02&lt;/span>, \
+&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">9.650715E-04&lt;/span>, &lt;span style="color:#ae81ff">8.802193E-06&lt;/span>, \
+&lt;span style="color:#f92672">-&lt;/span>&lt;span style="color:#ae81ff">3.110810E-08&lt;/span>, &lt;span style="color:#ae81ff">0.000000E+00&lt;/span>, \
+&lt;span style="color:#ae81ff">0.000000E+00&lt;/span>, &lt;span style="color:#ae81ff">0.000000E+00&lt;/span>, \
 ]
-else:
-print(&#39;voltage error&#39;)
-return None
-temp = 0
-for index, element in enumerate(b):
-temp += element * sumV**index
-return temp
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Cheap little SPI-interfaced breakout boards are &lt;a href=&#34;https://www.adafruit.com/product/269&#34;&gt;sold by Adafruit&lt;/a&gt;.&lt;/p&gt;</description></item><item><title>Amazon Fire TV 2nd Gen - Root &amp; OpenVPN</title><link>https://nagimov.me/post/fire-tv-2nd-gen-root-openvpn/</link><pubDate>Wed, 30 Mar 2016 19:35:32 -0800</pubDate><guid>https://nagimov.me/post/fire-tv-2nd-gen-root-openvpn/</guid><description>&lt;p&gt;&lt;strong&gt;My notes after spending half a day playing with my Fire TV.&lt;/strong&gt;&lt;/p&gt;
-&lt;p&gt;&lt;img src=&#34;https://nagimov.me/images/amazon-fire-tv.png#center&#34; alt=&#34;&#34; /&gt;&lt;/p&gt;
-&lt;p&gt;While Amazon Fire TV seems to be the best htpc solution for me, it still requires rooting and a bit of patching on its way to a decent media center. I&amp;rsquo;m also used to US streaming services (&lt;em&gt;Pandora&lt;/em&gt;, &lt;em&gt;Netflix&lt;/em&gt;, &lt;em&gt;Hulu&lt;/em&gt;, etc.) that are only available through VPN, if you are outside of US. Rooting and setting up Kodi + OpenVPN is a way to go.&lt;/p&gt;
-&lt;p&gt;Rooting is simple and straightforward, I followed &lt;a href=&#34;http://www.aftvnews.com/how-to-root-the-amazon-fire-tv-2/&#34;&gt;this guide&lt;/a&gt; and everything went smooth.&lt;/p&gt;
-&lt;p&gt;Problems started with OpenVPN. Even though there are few tutorials out there (&lt;a href=&#34;https://www.reddit.com/r/fireTV/comments/2b4hlh/finally_got_vpn_working/&#34;&gt;here&lt;/a&gt; and &lt;a href=&#34;https://vpntips.com/fire-tv-vpn-install/&#34;&gt;there&lt;/a&gt;), I wasn&amp;rsquo;t able to install OpenVPN using the &lt;a href=&#34;http://apps.evozi.com/apk-downloader/?id=de.schaeuffelhut.android.openvpn.installer&#34;&gt;installer apk&lt;/a&gt;.&lt;/p&gt;
-&lt;p&gt;&lt;a href=&#34;http://jjjjango.blogspot.ca/2013/07/how-to-manually-install-openvpn-binary.html&#34;&gt;Another tutorial&lt;/a&gt; suggests to do installer&amp;rsquo;s jobs manually (i.e. unpack OpenVPN binary to &lt;code&gt;/system/xbin/&lt;/code&gt;). I&amp;rsquo;ve done that and got &lt;code&gt;only position independent executables (PIE) are supported&lt;/code&gt; error when trying to start OpenVPN from adb console. Apparently, &lt;a href=&#34;http://forum.xda-developers.com/google-nexus-5/development/fix-bypassing-pie-security-check-t2797731&#34;&gt;there is a known issue&lt;/a&gt; with &lt;em&gt;position independent executables&lt;/em&gt; (whatever that means). The first solution is to find the OpenVPN binary compiled with PIE support (or compile it from sources adding &lt;code&gt;&amp;quot;-fPIE -pie&amp;quot;&lt;/code&gt; linker options), that could take awhile. Another way to deal with the PIE issue is to patch the &lt;code&gt;linker&lt;/code&gt; binary located in &lt;code&gt;/system/bin/&lt;/code&gt; directory. I&amp;rsquo;ve tried a bunch of different versions of the &lt;code&gt;linker&lt;/code&gt; file, sometimes getting Android to behave weirdly (e.g. randomly give &lt;code&gt;application storage space is full&lt;/code&gt; errors) or even screwing my Fire TV to the boot-loop. &lt;a href=&#34;http://forum.xda-developers.com/showpost.php?p=59497445&amp;amp;postcount=83&#34;&gt;This&lt;/a&gt; is the version of the patched linker that worked great with my Fire TV.&lt;/p&gt;
-&lt;p&gt;Here&amp;rsquo;s how to replace &lt;code&gt;linker&lt;/code&gt; file in &lt;code&gt;/system/bin/&lt;/code&gt; directory using &lt;code&gt;adb&lt;/code&gt;:&lt;/p&gt;
-&lt;pre&gt;&lt;code class=&#34;language-bash&#34;&gt;adb push linker /sdcard/
+&lt;span style="color:#66d9ef">else&lt;/span>:
+&lt;span style="color:#66d9ef">print&lt;/span>(&lt;span style="color:#e6db74">&amp;#39;voltage error&amp;#39;&lt;/span>)
+&lt;span style="color:#66d9ef">return&lt;/span> None
+temp &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#ae81ff">0&lt;/span>
+&lt;span style="color:#66d9ef">for&lt;/span> index, element &lt;span style="color:#f92672">in&lt;/span> enumerate(b):
+temp &lt;span style="color:#f92672">+=&lt;/span> element &lt;span style="color:#f92672">*&lt;/span> sumV&lt;span style="color:#f92672">**&lt;/span>index
+&lt;span style="color:#66d9ef">return&lt;/span> temp
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Cheap little SPI-interfaced breakout boards are &lt;a href="https://www.adafruit.com/product/269">sold by Adafruit&lt;/a>.&lt;/p></description></item><item><title>Amazon Fire TV 2nd Gen - Root &amp; OpenVPN</title><link>https://nagimov.me/post/amazon-fire-tv-2nd-gen-root-openvpn/</link><pubDate>Wed, 30 Mar 2016 19:35:32 -0800</pubDate><guid>https://nagimov.me/post/amazon-fire-tv-2nd-gen-root-openvpn/</guid><description>&lt;p>&lt;strong>My notes after spending half a day playing with my Fire TV.&lt;/strong>&lt;/p>
+&lt;p>&lt;img src="https://nagimov.me/images/amazon-fire-tv.png#center" alt="">&lt;/p>
+&lt;p>While Amazon Fire TV seems to be the best htpc solution for me, it still requires rooting and a bit of patching on its way to a decent media center. I&amp;rsquo;m also used to US streaming services (&lt;em>Pandora&lt;/em>, &lt;em>Netflix&lt;/em>, &lt;em>Hulu&lt;/em>, etc.) that are only available through VPN, if you are outside of US. Rooting and setting up Kodi + OpenVPN is a way to go.&lt;/p>
+&lt;p>Rooting is simple and straightforward, I followed &lt;a href="http://www.aftvnews.com/how-to-root-the-amazon-fire-tv-2/">this guide&lt;/a> and everything went smooth.&lt;/p>
+&lt;p>Problems started with OpenVPN. Even though there are few tutorials out there (&lt;a href="https://www.reddit.com/r/fireTV/comments/2b4hlh/finally_got_vpn_working/">here&lt;/a> and &lt;a href="https://vpntips.com/fire-tv-vpn-install/">there&lt;/a>), I wasn&amp;rsquo;t able to install OpenVPN using the &lt;a href="http://apps.evozi.com/apk-downloader/?id=de.schaeuffelhut.android.openvpn.installer">installer apk&lt;/a>.&lt;/p>
+&lt;p>&lt;a href="http://jjjjango.blogspot.ca/2013/07/how-to-manually-install-openvpn-binary.html">Another tutorial&lt;/a> suggests to do installer&amp;rsquo;s jobs manually (i.e. unpack OpenVPN binary to &lt;code>/system/xbin/&lt;/code>). I&amp;rsquo;ve done that and got &lt;code>only position independent executables (PIE) are supported&lt;/code> error when trying to start OpenVPN from adb console. Apparently, &lt;a href="http://forum.xda-developers.com/google-nexus-5/development/fix-bypassing-pie-security-check-t2797731">there is a known issue&lt;/a> with &lt;em>position independent executables&lt;/em> (whatever that means). The first solution is to find the OpenVPN binary compiled with PIE support (or compile it from sources adding &lt;code>&amp;quot;-fPIE -pie&amp;quot;&lt;/code> linker options), that could take awhile. Another way to deal with the PIE issue is to patch the &lt;code>linker&lt;/code> binary located in &lt;code>/system/bin/&lt;/code> directory. I&amp;rsquo;ve tried a bunch of different versions of the &lt;code>linker&lt;/code> file, sometimes getting Android to behave weirdly (e.g. randomly give &lt;code>application storage space is full&lt;/code> errors) or even screwing my Fire TV to the boot-loop. &lt;a href="http://forum.xda-developers.com/showpost.php?p=59497445&amp;amp;postcount=83">This&lt;/a> is the version of the patched linker that worked great with my Fire TV.&lt;/p>
+&lt;p>Here&amp;rsquo;s how to replace &lt;code>linker&lt;/code> file in &lt;code>/system/bin/&lt;/code> directory using &lt;code>adb&lt;/code>:&lt;/p>
+&lt;div class="highlight">&lt;pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4">&lt;code class="language-bash" data-lang="bash">adb push linker /sdcard/
 adb shell
 su
 mount -o remount rw /system
 mv /system/bin/linker /system/bin/linker.bak
 cp /sdcard/linker /system/bin/
-chmod 755 /system/bin/linker
+chmod &lt;span style="color:#ae81ff">755&lt;/span> /system/bin/linker
 mount -o remount ro /system
 rm /sdcard/linker
-&lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;Happy Kodiing!&lt;/p&gt;</description></item></channel></rss>
+&lt;/code>&lt;/pre>&lt;/div>&lt;p>Happy Kodiing!&lt;/p></description></item></channel></rss>
